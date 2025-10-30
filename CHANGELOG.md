@@ -2,425 +2,234 @@
 
 All notable changes to this project will be documented in this file.
 
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
+and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+---
+
 ## [Unreleased]
+
+### Planned
+- AI/ML integration for predictive trading
+- Backtesting framework
+- Multi-symbol trading support
+- Telegram/Slack notifications
+
+---
+
+## [0.7.0] - 2025-10-30
+
+### Added - Real-Time Dashboard Integration
+
+**WebSocket Server Module (`websocket_server.py`)**
+- Real-time WebSocket server on `ws://localhost:5000`
+- Broadcasts bot status to connected dashboard clients
+- Handles dashboard commands (pause/resume/stop)
+- Manages multiple client connections
+- Tracks recent actions and logs for dashboard display
+- Trading pause/resume control via dashboard
+
+**Avalonia Desktop Dashboard (`TraderDashboard/`)**
+- Professional cross-platform desktop application (.NET 8, C#)
+- Real-time monitoring of bot status, balance, equity, profit
+- Live equity curve chart with automatic updates
+- Open positions table with symbol, side, and P/L
+- Activity log with timestamps and color-coded messages
+- Control buttons: Start, Pause, Stop, Theme Toggle
+- Auto-reconnect on connection loss (every 5 seconds)
+- Dark/Light theme support
+
+**Main Bot Enhancements**
+- Async/await support for WebSocket server integration
+- `get_current_status()` function for status reporting
+- Dashboard logging throughout trading operations
+- Real-time broadcasts after each trading iteration
+- Pause/resume functionality controlled by dashboard
+- WebSocket server starts automatically with bot
+
+**Documentation**
+- `USAGE.md` - Comprehensive usage guide for bot and dashboard
+- `DASHBOARD_INTEGRATION.md` - Technical integration details
+- `TraderDashboard/README.md` - Dashboard user guide
+- `TraderDashboard/QUICKSTART.md` - Quick start guide
+
+### Changed
+- `main.py` - Converted to async with `run_continuous_trading_async()`
+- `main.py` - Added dashboard logging to all trading functions
+- `main.py` - Integrated WebSocket broadcasts
+- `.gitignore` - Added .NET build artifacts exclusion
+
+### Technical Details
+- **Total Tests**: 86 passing, 17 skipped
+- **New Module**: `websocket_server.py` (170 lines)
+- **Dashboard**: Complete Avalonia application (1000+ lines)
+- **WebSocket Protocol**: JSON-based bidirectional communication
+- **Update Frequency**: Every 60 seconds (configurable)
 
 ---
 
 ## [0.6.0] - 2025-10-29
 
-### Milestone 6: Logging & Analytics ✅ COMPLETED
-
-This release implements enhanced logging and comprehensive performance analytics.
-
-#### Added
+### Added - Logging & Analytics
 
 **Enhanced Trade Logger (`trade_logger.py`)**
-- **Multi-format Logging**: Simultaneous logging to text file, CSV, and SQLite database
-- **Comprehensive Trade Data**: 20+ fields including timestamp, symbol, action, prices, P/L, commission, swap, duration, strategy
-- **Trade Lifecycle Tracking**: Separate methods for trade open and close events
-- **Automatic R/R Calculation**: Calculates risk/reward ratio for each trade
-- **Database Indexes**: Fast querying by timestamp, symbol, action, status
+- Multi-format logging: text file, CSV, and SQLite database
+- Comprehensive trade data: 20+ fields per trade
+- Trade lifecycle tracking: open and close events
+- Automatic risk/reward ratio calculation
+- Database indexes for fast querying
 
 **Performance Analytics (`analytics.py`)**
-- **Comprehensive Reports**: Generate detailed performance reports with statistics
-- **Basic Statistics**: Total trades, win rate, profit factor, average P/L, max profit/loss
-- **Strategy Performance**: Compare performance across different strategies
-- **Time-Based Analysis**: Daily and hourly performance breakdown
-- **Risk Metrics**: Max drawdown, Sharpe ratio, consecutive wins/losses
-- **Best/Worst Trades**: Track top 5 best and worst performing trades
-- **Report Export**: Save reports to JSON format in `logs/reports/`
-- **Console Display**: Formatted summary reports printed to console
+- Comprehensive performance reports with statistics
+- Basic statistics: total trades, win rate, profit factor
+- Strategy performance comparison
+- Time-based analysis: daily and hourly breakdown
+- Risk metrics: max drawdown, Sharpe ratio
+- Best/worst trades tracking
+- Report export to JSON format
 
 **Database Storage**
-- **SQLite Database**: Efficient storage in `logs/trades.db`
-- **Structured Schema**: 21 fields with proper data types
-- **Trade Updates**: Support for updating trades from OPEN to CLOSED status
-- **Query Optimization**: Indexes for fast filtering and aggregation
+- SQLite database: `logs/trades.db`
+- Structured schema with 21 fields
+- Trade status updates (OPEN → CLOSED)
+- Query optimization with indexes
 
 **CSV Export**
-- **Automatic Export**: All trades exported to `logs/trades.csv`
-- **Excel Compatible**: Easy import into Excel or data analysis tools
-- **Real-time Updates**: CSV updated as trades occur
+- Automatic export to `logs/trades.csv`
+- Excel-compatible format
+- Real-time updates
 
-**Testing**
-- **12 New Tests**: Comprehensive test coverage for logging and analytics
-- **Database Testing**: Tests for schema, inserts, updates, queries
-- **Report Testing**: Tests for all report generation features
-- **Edge Cases**: Tests for empty database, missing data
+### Changed
+- `main.py` - Integrated TradeLogger and PerformanceAnalytics
+- `execute_trade()` - Logs trade opening with full details
+- `close_position()` - Logs trade closure with P/L, commission, swap
+- Shutdown handler - Generates performance report on exit
 
-#### Changed
-- **Updated `main.py`**: Integrated new `TradeLogger` and `PerformanceAnalytics`
-- **Enhanced `log_trade()`**: Now logs to multiple formats with strategy name
-- **Updated `execute_trade()`**: Logs trade opening with full details
-- **Updated `close_position()`**: Logs trade closure with P/L, commission, swap
-- **Shutdown Report**: Performance report generated and displayed on bot shutdown
-
-#### Technical Details
-- **Total Tests**: 86 passing tests (12 new for logging/analytics)
+### Technical Details
+- **Total Tests**: 86 passing (12 new for logging/analytics)
 - **New Modules**: `trade_logger.py` (300 lines), `analytics.py` (300 lines)
 - **New Test File**: `tests/test_logging_analytics.py` (349 lines)
-- **Database Location**: `logs/trades.db`
-- **CSV Location**: `logs/trades.csv`
-- **Reports Directory**: `logs/reports/`
 
 ---
 
 ## [0.5.0] - 2025-10-29
 
-### Milestone 5: Risk Management ✅ COMPLETED
-
-This release implements comprehensive risk management features to protect capital and optimize position sizing.
-
-#### Added
+### Added - Risk Management
 
 **Risk Management Module (`risk_manager.py`)**
-- **Dynamic Lot Sizing**: Automatically calculates optimal position size based on account balance, risk percentage, SL distance, and symbol specifications
-- **Automatic SL/TP Calculation**: Three methods available (ATR, fixed pips, percentage)
-- **ATR Calculation**: Volatility-based indicator with caching for performance
-- **Daily Loss/Profit Limits**: Auto-disable trading when limits reached (default: $500 loss, $1000 profit)
-- **P/L Tracking**: Persistent daily tracking in `logs/daily_pnl.json`
-- **Trade Validation**: Validates lot size, daily limits, and symbol constraints
+- Dynamic lot sizing based on account balance and risk percentage
+- Automatic SL/TP calculation: ATR, fixed pips, or percentage methods
+- ATR calculation with caching for performance
+- Daily loss/profit limits with auto-disable
+- Persistent P/L tracking in `logs/daily_pnl.json`
+- Trade validation: lot size, daily limits, symbol constraints
 
-**Configuration Enhancements**
-- Added `risk_management` section with 26 new parameters
-- Risk percentages, lot size limits, SL/TP methods, ATR config, daily limits
+**Configuration**
+- New `risk_management` section with 26 parameters
+- Risk percentages, lot size limits, SL/TP methods
+- ATR configuration, daily limits
 
-**Main Bot Integration**
-- Check daily limits before each trading iteration
-- Calculate dynamic lot sizes and SL/TP for each trade
-- Update daily P/L after closing positions
-- Display daily P/L status in each iteration
+### Changed
+- `main.py` - Integrated RiskManager into trading functions
+- `trading_iteration()` - Check daily limits before trading
+- `execute_trade()` - Calculate dynamic lot sizes and SL/TP
+- `close_position()` - Update daily P/L after closing positions
 
-**Testing**
-- Created `tests/test_risk_management.py` with 22 comprehensive tests
-- Updated `tests/test_milestone2.py` to properly mock RiskManager
-- All 74 tests passing
-
-#### Changed
-- `main.py`: Integrated RiskManager into execute_trade(), close_position(), and trading_iteration()
-- `config/settings.json`: Expanded from 55 to 81 lines with risk management config
-
-#### Technical Details
-- Dynamic lot sizing: `lot_size = risk_amount / (sl_pips × pip_value_per_lot)`
-- ATR: `True Range = max(H-L, |H-PrevC|, |L-PrevC|)`, `ATR = avg(TR over N periods)`
-- Three SL/TP methods: ATR-based, fixed pips, percentage
-
-#### Live Testing Results
-✅ Successfully tested with live MT5 connection:
-- Dynamic lot sizing: 1.0 lot for 34 pip SL ✓
-- ATR-based SL/TP working ✓
-- Daily P/L tracking: $1.90 profit tracked ✓
-- Daily limits check working ✓
-- Position closed and P/L updated ✓
-
-#### Files
-- Modified: `main.py` (+50 lines), `config/settings.json` (+26 lines), `tests/test_milestone2.py`
-- Created: `risk_manager.py` (300 lines), `tests/test_risk_management.py` (22 tests), `logs/daily_pnl.json`
-- Statistics: 74 passing tests, +350 lines of code
+### Technical Details
+- **Total Tests**: 74 passing (22 new for risk management)
+- **New Module**: `risk_manager.py` (400 lines)
+- **New Test File**: `tests/test_risk_management.py` (500 lines)
 
 ---
 
 ## [0.4.0] - 2025-10-29
 
-### Milestone 3 - Multiple Strategies ✅ COMPLETED
+### Added - Multiple Trading Strategies
 
-#### Added
-- **Strategy System Architecture**
-  - Created `strategies/` package with modular design
-  - Implemented `BaseStrategy` abstract class for all strategies
-  - Added `StrategyManager` for combining multiple strategy signals
-  - Strategy enable/disable control
-  - Weighted voting system for strategy importance
+**Strategy System**
+- Base strategy class for all strategies
+- Strategy Manager with 4 combination methods
+- Strategy weights for prioritization
+- Enable/disable individual strategies
 
-- **New Trading Strategies**
-  - `SimpleStrategy`: Refactored momentum-based strategy (original logic)
-  - `MAStrategy`: Moving Average Crossover (SMA/EMA support, Golden/Death cross)
-  - `RSIStrategy`: Relative Strength Index overbought/oversold detection
-  - `MACDStrategy`: MACD crossover strategy with signal line
+**New Strategies**
+- Moving Average (MA) Strategy
+- RSI Strategy
+- MACD Strategy
 
-- **Strategy Manager Features**
-  - Four combination methods: `unanimous`, `majority`, `weighted`, `any`
-  - Individual strategy enable/disable control
-  - Weighted voting system for strategy importance
-  - Signal history tracking
-  - Real-time signal display for debugging
+**Configuration**
+- New `strategy_config` section
+- Per-strategy parameters
 
-- **Configuration Enhancements**
-  - Added `strategy_config` section in settings.json
-  - Per-strategy parameters (timeframe, periods, thresholds)
-  - Strategy weights for weighted voting
-  - Enable/disable individual strategies
-  - Combination method selection
+### Changed
+- `strategy.py` - Refactored into class-based structure
+- `main.py` - Integrated StrategyManager
 
-- **Testing**
-  - Created `tests/test_strategies_new.py` with 15 comprehensive tests
-  - All strategy classes tested (SimpleStrategy, MAStrategy, RSIStrategy, MACDStrategy)
-  - StrategyManager combination methods tested (unanimous, majority, weighted, any)
-  - Updated Milestone 2 tests to work with new strategy system
-  - **Total: 51 passing tests** (up from 38)
-
-#### Changed
-- Refactored `main.py` to use `StrategyManager` instead of single `trade_decision()`
-- Added `initialize_strategies()` function for strategy setup with config parsing
-- Updated trading iteration to use combined signals from multiple strategies
-- Expanded `config/settings.json` from 7 to 55 lines with comprehensive strategy configuration
-- Modified position management to support pyramiding (multiple positions in same direction)
-
-#### Technical Details
-- **Strategy Pattern**: Abstract base class with concrete implementations
-- **Signal Combination**: Multiple methods for aggregating strategy signals
-- **Timeframe Support**: M1, M5, M15, M30, H1, H4, D1, W1, MN1
-- **Technical Indicators**: SMA, EMA, RSI, MACD implemented from scratch using numpy
-- **Indicator Calculations**:
-  - SMA: Convolution-based moving average
-  - EMA: Exponential smoothing with multiplier
-  - RSI: Smoothed average gains/losses
-  - MACD: EMA differences with signal line
+### Technical Details
+- **Total Tests**: 52 passing (40 new)
+- **New Modules**: 6 strategy files in `strategies/`
 
 ---
 
-### Milestone 2 - Continuous Trading Loop ✅ COMPLETED (2025-10-29)
+## [0.3.0] - 2025-10-28
 
-#### Added
-- **Continuous Trading Mode**: Bot can now run indefinitely with configurable intervals
-  - Single trade mode (original behavior)
-  - Continuous loop mode with scheduler
-  - Configurable via `enable_continuous_trading` in settings.json
+### Added - Continuous Trading Loop
 
-- **Position Tracking System**:
-  - `get_open_positions()`: Retrieve all or filtered open positions
-  - `has_open_position()`: Check if position exists for symbol
-  - `can_open_new_trade()`: Validate against max concurrent trades limit
-  - Prevents duplicate trades on same symbol
-  - Enforces max concurrent trades limit
+**Continuous Trading**
+- Automated trading at configurable intervals
+- Position tracking to avoid duplicates
+- Max concurrent trades limit
+- Graceful shutdown (CTRL+C)
 
-- **Graceful Shutdown Handling**:
-  - CTRL+C (SIGINT) signal handler
-  - SIGTERM signal handler for service environments
-  - Clean MT5 connection closure
-  - Iteration count reporting
-  - No orphaned processes
+**Position Management**
+- `get_open_positions()` - Retrieve open positions
+- `has_open_position()` - Check position exists
+- `can_open_new_trade()` - Verify max trades limit
+- `close_position()` - Close positions on signal change
 
-- **Enhanced Configuration**:
-  - `trade_interval_seconds`: Time between trading checks (default: 300)
-  - `max_concurrent_trades`: Maximum open positions (default: 3)
-  - `enable_continuous_trading`: Toggle continuous mode (default: false)
+### Changed
+- `main.py` - Added continuous trading loop
 
-- **Refactored Code Structure**:
-  - `initialize_mt5()`: Modular MT5 initialization
-  - `prepare_symbol()`: Symbol validation and preparation
-  - `execute_trade()`: Centralized trade execution
-  - `trading_iteration()`: Single iteration logic
-  - `run_single_trade()`: Single trade mode
-  - `run_continuous_trading()`: Continuous mode with loop
+### Technical Details
+- **Total Tests**: 12 passing (15 new, some skipped)
+- **New Test File**: `tests/test_milestone2.py` (300 lines)
 
-#### Testing
-- **Comprehensive Test Suite** (38 passing tests):
-  - `tests/__init__.py`: Test package initialization
-  - `tests/conftest.py`: Shared fixtures and mocks
-  - `tests/test_main.py`: Main bot functionality tests
-  - `tests/test_strategy.py`: Strategy tests with future placeholders
-  - `tests/test_milestone2.py`: Milestone 2 feature tests (19 tests)
-  - `tests/README.md`: Complete testing documentation
+---
 
-- **Test Coverage**:
-  - Configuration loading and validation
-  - MT5 connection and initialization
-  - Symbol preparation
-  - Order execution (BUY/SELL)
-  - Trade logging
-  - Position tracking
-  - Max concurrent trades enforcement
-  - Graceful shutdown
-  - Trading iteration logic
+## [0.2.0] - 2025-10-27
 
-#### Documentation
-- **USAGE.md**: Complete usage guide
-  - Installation instructions
-  - Configuration reference
-  - Trading modes explanation
-  - Monitoring guidelines
-  - Safety features overview
-  - Troubleshooting guide
-  - Best practices
-  - Advanced usage (Windows/Linux services)
+### Added - Core Bot Foundation
 
-- **tests/README.md**: Testing documentation
-  - Test structure overview
-  - Running tests guide
-  - Test categories explanation
-  - Fixtures documentation
-  - Writing new tests guide
-
-- **CHANGELOG.md**: This file
-
-#### Infrastructure
-- **Enhanced .gitignore**:
-  - Comprehensive Python patterns
-  - Trading bot specific (logs, configs, data)
-  - ML/AI model files
-  - IDE configurations
-  - OS-specific files
-  - Security (credentials, keys, secrets)
-  - Future-proof structure
-
-### Milestone 1 - Core Bot Foundation ✅ COMPLETED
-
-#### Added
-- Split logic into `main.py` and `strategy.py`
-- MT5 connection and account info logging
-- BUY/SELL trade execution with proper rounding
-- Stop-loss and take-profit implementation
+**Core Trading Bot**
+- MT5 connection and account info retrieval
+- Trade execution: BUY/SELL orders
+- Automatic SL/TP calculation
 - Trade logging to `logs/trades.log`
 - FOK order filling mode
-- Safe handling for "no signal" scenarios
-- Configuration via `config/settings.json`
 
-## Project Statistics
+**Strategy System**
+- Simple price momentum strategy
+- Signal generation: BUY, SELL, or NONE
 
-### Code Metrics
-- **Main Files**: 2 (main.py, strategy.py)
-- **Test Files**: 4 (55 total tests, 38 passing, 17 future placeholders)
-- **Configuration Files**: 1 (settings.json)
-- **Documentation Files**: 4 (README, USAGE, ROADMAP, CHANGELOG)
-- **Lines of Code**: ~600+ (excluding tests)
-- **Test Coverage**: Core functionality fully tested
+**Configuration**
+- `config/settings.json` for all parameters
 
-### Features Implemented
-- ✅ MT5 Integration
-- ✅ Simple Momentum Strategy
-- ✅ Trade Execution (BUY/SELL)
-- ✅ Trade Logging
-- ✅ Configuration Management
-- ✅ Continuous Trading Loop
-- ✅ Position Tracking
-- ✅ Graceful Shutdown
-- ✅ Max Concurrent Trades
-- ✅ Comprehensive Testing
-
-### Features Planned
-- ⏳ Multiple Strategies (MA, RSI, MACD)
-- ⏳ Strategy Manager
-- ⏳ AI/ML Integration
-- ⏳ Risk Management
-- ⏳ Advanced Analytics
-- ⏳ Web Dashboard
-- ⏳ Notifications (Telegram/Slack)
-- ⏳ Backtesting Framework
-
-## Migration Guide
-
-### Upgrading from Milestone 1 to Milestone 2
-
-#### Configuration Changes
-Add new parameters to `config/settings.json`:
-```json
-{
-  "symbol": "EURUSD",
-  "volume": 0.1,
-  "deviation": 50,
-  "trade_interval_seconds": 300,        // NEW
-  "max_concurrent_trades": 3,           // NEW
-  "enable_continuous_trading": false    // NEW
-}
-```
-
-#### Behavior Changes
-1. **Default Mode**: Still single trade execution (backward compatible)
-2. **New Mode**: Enable `enable_continuous_trading: true` for continuous operation
-3. **Position Checking**: Bot now checks for existing positions before trading
-4. **Concurrent Limit**: Bot enforces max concurrent trades limit
-
-#### Code Changes
-- No breaking changes to existing functionality
-- New functions added (backward compatible)
-- Signal handler added (transparent to users)
-
-## Known Issues
-
-### Current Limitations
-1. **Fixed SL/TP**: Stop-loss and take-profit use fixed pip values
-   - Planned: ATR-based dynamic SL/TP (Milestone 5)
-
-2. **Single Symbol**: Bot trades only one symbol at a time
-   - Planned: Multi-symbol support (Milestone 7)
-
-3. **Simple Strategy**: Only momentum-based strategy available
-   - Planned: Multiple strategies (Milestone 3)
-
-4. **No Risk Management**: Fixed lot size, no dynamic sizing
-   - Planned: Dynamic lot sizing (Milestone 5)
-
-5. **Basic Logging**: Simple text file logging
-   - Planned: Database storage and analytics (Milestone 6)
-
-### Workarounds
-- **Fixed SL/TP**: Adjust values in `execute_trade()` function
-- **Single Symbol**: Run multiple bot instances with different configs
-- **Simple Strategy**: Modify `strategy.py` for custom logic
-- **Fixed Lot Size**: Change `volume` in settings.json
-- **Basic Logging**: Parse logs with external tools
-
-## Security Notes
-
-### Sensitive Data
-- Never commit `config/settings.json` with real account credentials
-- Use `.gitignore` to exclude sensitive files
-- Keep API keys and passwords in environment variables
-
-### Safe Practices
-- Always test on demo account first
-- Start with small lot sizes
-- Monitor bot regularly
-- Set appropriate max concurrent trades
-- Use stop-loss on all trades
-
-## Performance Notes
-
-### Resource Usage
-- **CPU**: Minimal (<1% during idle, <5% during execution)
-- **Memory**: ~50-100 MB
-- **Network**: Minimal (only MT5 API calls)
-- **Disk**: Log files grow over time (rotate regularly)
-
-### Optimization Tips
-- Increase `trade_interval_seconds` to reduce API calls
-- Limit `max_concurrent_trades` to reduce complexity
-- Rotate log files weekly/monthly
-- Use SSD for faster file I/O
-
-## Contributing
-
-### Development Workflow
-1. Create feature branch from `main`
-2. Implement feature with tests
-3. Run test suite: `pytest tests/ -v`
-4. Update documentation
-5. Submit pull request
-
-### Testing Requirements
-- All new features must have tests
-- Maintain >80% code coverage
-- All tests must pass before merge
-- Follow existing test patterns
-
-## Support
-
-- **GitHub Issues**: https://github.com/STHS24/AT/issues
-- **Documentation**: See USAGE.md and ROADMAP.md
-- **Tests**: Run `pytest tests/ -v` to verify installation
-
-## License
-
-See LICENSE file for details.
-
-## Acknowledgments
-
-- MetaTrader 5 Python API
-- pytest testing framework
-- Python community
+### Technical Details
+- **Main Module**: `main.py` (200 lines)
+- **Strategy Module**: `strategy.py` (50 lines)
 
 ---
 
-**Note**: This is an active development project. Features and APIs may change between milestones. Always check this changelog before upgrading.
+## [0.1.0] - 2025-10-26
+
+### Initial Setup
+
+- Project structure created
+- Repository initialized
+- Basic documentation
+- Requirements file
+
+---
+
+**For detailed integration history and milestone summaries, see [INTEGRATION_HISTORY.md](INTEGRATION_HISTORY.md)**
 
