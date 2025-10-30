@@ -1,0 +1,211 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:lvc="using:LiveChartsCore.SkiaSharpView.Avalonia"
+        xmlns:models="using:TraderDashboard.Models"
+        mc:Ignorable="d" d:DesignWidth="1200" d:DesignHeight="800"
+        x:Class="TraderDashboard.MainWindow"
+        Title="TraderBot Dashboard" 
+        Width="1200" 
+        Height="800"
+        MinWidth="800"
+        MinHeight="600">
+
+    <Window.Styles>
+        <Style Selector="TextBlock.header">
+            <Setter Property="FontSize" Value="16"/>
+            <Setter Property="FontWeight" Value="Bold"/>
+            <Setter Property="Margin" Value="0,0,0,8"/>
+        </Style>
+        
+        <Style Selector="TextBlock.value">
+            <Setter Property="FontSize" Value="24"/>
+            <Setter Property="FontWeight" Value="Bold"/>
+        </Style>
+        
+        <Style Selector="TextBlock.label">
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="Foreground" Value="#888"/>
+        </Style>
+        
+        <Style Selector="Border.card">
+            <Setter Property="Background" Value="#F5F5F5"/>
+            <Setter Property="CornerRadius" Value="8"/>
+            <Setter Property="Padding" Value="16"/>
+            <Setter Property="Margin" Value="4"/>
+        </Style>
+        
+        <Style Selector="Border.card:pointerover">
+            <Setter Property="Background" Value="#EEEEEE"/>
+        </Style>
+        
+        <Style Selector="Button.control">
+            <Setter Property="Padding" Value="16,8"/>
+            <Setter Property="Margin" Value="4"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+        </Style>
+    </Window.Styles>
+
+    <Grid RowDefinitions="Auto,*,Auto" Margin="16">
+        
+        <!-- Header Section -->
+        <Border Grid.Row="0" Classes="card" Padding="20" Margin="0,0,0,16">
+            <Grid ColumnDefinitions="Auto,*,Auto,Auto,Auto">
+                
+                <!-- Status Indicator -->
+                <StackPanel Grid.Column="0" Spacing="4" Margin="0,0,32,0">
+                    <TextBlock Classes="label" Text="STATUS"/>
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                        <Ellipse x:Name="StatusIndicator" 
+                                 Width="12" 
+                                 Height="12" 
+                                 Fill="Gray"
+                                 VerticalAlignment="Center"/>
+                        <TextBlock x:Name="StatusText" 
+                                   Classes="value" 
+                                   FontSize="18"
+                                   Text="DISCONNECTED"/>
+                    </StackPanel>
+                </StackPanel>
+
+                <!-- Balance -->
+                <StackPanel Grid.Column="2" Spacing="4" Margin="16,0">
+                    <TextBlock Classes="label" Text="BALANCE"/>
+                    <TextBlock x:Name="BalanceText" 
+                               Classes="value" 
+                               Text="$0.00"/>
+                </StackPanel>
+
+                <!-- Equity -->
+                <StackPanel Grid.Column="3" Spacing="4" Margin="16,0">
+                    <TextBlock Classes="label" Text="EQUITY"/>
+                    <TextBlock x:Name="EquityText" 
+                               Classes="value" 
+                               Text="$0.00"/>
+                </StackPanel>
+
+                <!-- Profit -->
+                <StackPanel Grid.Column="4" Spacing="4" Margin="16,0,0,0">
+                    <TextBlock Classes="label" Text="PROFIT"/>
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                        <TextBlock x:Name="ProfitText" 
+                                   Classes="value" 
+                                   Text="$0.00"/>
+                        <TextBlock x:Name="ProfitPercentageText" 
+                                   Classes="value" 
+                                   FontSize="18"
+                                   VerticalAlignment="Center"
+                                   Text="(0.00%)"/>
+                    </StackPanel>
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <!-- Main Content -->
+        <Grid Grid.Row="1" ColumnDefinitions="1*,2*" Margin="0,0,0,16">
+            
+            <!-- Left: Positions Table -->
+            <Border Grid.Column="0" Classes="card" Margin="0,0,8,0">
+                <StackPanel Spacing="12">
+                    <TextBlock Classes="header" Text="📊 OPEN POSITIONS"/>
+                    
+                    <ScrollViewer MaxHeight="500">
+                        <ItemsControl x:Name="PositionsTable">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate DataType="models:Position">
+                                    <Border Background="#FFFFFF" 
+                                            CornerRadius="4" 
+                                            Padding="12" 
+                                            Margin="0,0,0,8">
+                                        <Grid ColumnDefinitions="*,Auto,Auto">
+                                            <TextBlock Grid.Column="0" 
+                                                       Text="{Binding Symbol}" 
+                                                       FontWeight="Bold"
+                                                       FontSize="14"/>
+                                            <TextBlock Grid.Column="1" 
+                                                       Text="{Binding SideDisplay}" 
+                                                       FontSize="12"
+                                                       Margin="8,0"/>
+                                            <TextBlock Grid.Column="2" 
+                                                       Text="{Binding ProfitDisplay}" 
+                                                       FontWeight="SemiBold"
+                                                       FontSize="14"/>
+                                        </Grid>
+                                    </Border>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </ScrollViewer>
+                    
+                    <TextBlock x:Name="NoPositionsText" 
+                               Text="No open positions" 
+                               Foreground="#888"
+                               HorizontalAlignment="Center"
+                               Margin="0,20"/>
+                </StackPanel>
+            </Border>
+
+            <!-- Right: Equity Chart -->
+            <Border Grid.Column="1" Classes="card" Margin="8,0,0,0">
+                <StackPanel Spacing="12">
+                    <TextBlock Classes="header" Text="📈 EQUITY CURVE"/>
+                    <lvc:CartesianChart x:Name="EquityChart" 
+                                        Height="500"/>
+                </StackPanel>
+            </Border>
+        </Grid>
+
+        <!-- Bottom: Logs and Controls -->
+        <Grid Grid.Row="2" RowDefinitions="Auto,*">
+            
+            <!-- Control Buttons -->
+            <StackPanel Grid.Row="0" 
+                        Orientation="Horizontal" 
+                        HorizontalAlignment="Center"
+                        Margin="0,0,0,12">
+                <Button x:Name="StartButton" 
+                        Classes="control"
+                        Content="▶️ START"
+                        Click="OnStartClick"/>
+                <Button x:Name="PauseButton" 
+                        Classes="control"
+                        Content="⏸️ PAUSE"
+                        Click="OnPauseClick"/>
+                <Button x:Name="StopButton" 
+                        Classes="control"
+                        Content="⏹️ STOP"
+                        Click="OnStopClick"/>
+                <Button x:Name="ThemeToggle" 
+                        Classes="control"
+                        Content="🌙 DARK MODE"
+                        Click="OnThemeToggleClick"
+                        Margin="32,4,4,4"/>
+            </StackPanel>
+
+            <!-- Logs Panel -->
+            <Border Grid.Row="1" Classes="card">
+                <StackPanel Spacing="12">
+                    <TextBlock Classes="header" Text="📝 ACTIVITY LOG"/>
+                    
+                    <ScrollViewer x:Name="LogScrollViewer"
+                                  Height="200"
+                                  VerticalScrollBarVisibility="Auto">
+                        <ItemsControl x:Name="LogsPanel">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate DataType="x:String">
+                                    <TextBlock Text="{Binding}" 
+                                               FontFamily="Consolas,Courier New"
+                                               FontSize="12"
+                                               Margin="0,2"
+                                               TextWrapping="Wrap"/>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </ScrollViewer>
+                </StackPanel>
+            </Border>
+        </Grid>
+    </Grid>
+</Window>
+

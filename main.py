@@ -4,6 +4,7 @@ import json
 import os
 import time
 import signal
+import asyncio
 from datetime import datetime
 
 # Import new strategy system
@@ -21,6 +22,9 @@ from risk_manager import RiskManager
 # Import logging and analytics
 from trade_logger import TradeLogger
 from analytics import PerformanceAnalytics
+
+# Import WebSocket server for dashboard
+import websocket_server
 
 # ------------------------------
 # GLOBAL STATE
@@ -350,10 +354,19 @@ def execute_trade(symbol, action):
         # Get strategy name from manager
         strategy_name = STRATEGY_MANAGER.method.upper()
         log_trade(action, result, volume, price, sl, tp, strategy=strategy_name)
+
+        # Dashboard update
+        websocket_server.add_dashboard_log(f"✅ {action} executed | Ticket: {result.order} | Price: {result.price:.5f}")
+        websocket_server.add_dashboard_action(f"Opened {action} position on {symbol}")
+
         return True
     else:
         print(f"\n❌ {action} failed! Code {result.retcode}: {result.comment}")
         log_trade(f"{action}_FAILED", result, volume, price, sl, tp, strategy="FAILED")
+
+        # Dashboard update
+        websocket_server.add_dashboard_log(f"❌ {action} failed | Code: {result.retcode}")
+
         return False
 
 
@@ -417,10 +430,71 @@ def close_position(position):
         # Update daily P/L tracking
         RISK_MANAGER.update_daily_pnl(profit)
 
+        # Dashboard update
+        websocket_server.add_dashboard_log(f"✅ Closed position #{position.ticket} | Profit: ${profit:.2f}")
+
         return True
     else:
         print(f"❌ Failed to close position #{position.ticket} | Code: {result.retcode}")
         return False
+
+
+def get_current_status() -> dict:
+    """
+    Get current bot status for dashboard.
+
+    Returns:
+        dict: Status data in dashboard format
+    """
+    try:
+        account_info = mt5.account_info()
+
+        if account_info is None:
+            return {
+                "status": "error",
+                "balance": 0.0,
+                "equity": 0.0,
+                "profit": 0.0,
+                "positions": [],
+                "actions": [],
+                "logs": ["⚠️ MT5 connection error"]
+            }
+
+        # Get open positions
+        positions = mt5.positions_get()
+        position_list = []
+
+        if positions:
+            for pos in positions:
+                position_list.append({
+                    "symbol": pos.symbol,
+                    "side": "long" if pos.type == mt5.ORDER_TYPE_BUY else "short",
+                    "profit": round(pos.profit, 2)
+                })
+
+        # Determine status
+        status = websocket_server.get_dashboard_status()
+
+        return {
+            "status": status,
+            "balance": round(account_info.balance, 2),
+            "equity": round(account_info.equity, 2),
+            "profit": round(account_info.profit, 2),
+            "positions": position_list,
+            "actions": websocket_server.get_recent_actions(),
+            "logs": websocket_server.get_recent_logs()
+        }
+    except Exception as e:
+        print(f"[Dashboard] Error getting status: {e}")
+        return {
+            "status": "error",
+            "balance": 0.0,
+            "equity": 0.0,
+            "profit": 0.0,
+            "positions": [],
+            "actions": [],
+            "logs": [f"❌ Error: {str(e)}"]
+        }
 
 
 def trading_iteration(symbol):
@@ -434,6 +508,10 @@ def trading_iteration(symbol):
     print(f"🔄 Trading iteration at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     print(f"{'='*60}")
 
+    # Dashboard: Add iteration log
+    websocket_server.add_dashboard_log(f"🔄 Trading iteration started")
+    websocket_server.add_dashboard_action(f"Analyzing {symbol}")
+
     # Display daily P/L status
     daily_pnl = RISK_MANAGER.get_daily_pnl()
     can_trade, reason = RISK_MANAGER.can_trade()
@@ -441,6 +519,7 @@ def trading_iteration(symbol):
 
     if not can_trade:
         print(f"🚫 Trading halted: {reason}")
+        websocket_server.add_dashboard_log(f"🚫 Trading halted: {reason}")
         return
 
     # Get combined strategy decision
@@ -448,7 +527,13 @@ def trading_iteration(symbol):
 
     if action not in ["BUY", "SELL"]:
         print("⚠️  No trade signal from strategy.")
+        websocket_server.add_dashboard_log("💤 No signal - waiting")
+        websocket_server.add_dashboard_action("Waiting for signal...")
         return
+
+    # Dashboard: Signal detected
+    websocket_server.add_dashboard_log(f"🎯 Signal detected: {action} on {symbol}")
+    websocket_server.add_dashboard_action(f"Signal: {action} {symbol}")
 
     # Check existing positions on this symbol
     existing_positions = get_open_positions(symbol)
@@ -496,8 +581,8 @@ def run_single_trade():
     mt5.shutdown()
 
 
-def run_continuous_trading():
-    """Run continuous trading loop with scheduler."""
+async def run_continuous_trading_async():
+    """Run continuous trading loop with WebSocket dashboard support."""
     global running
 
     if not initialize_mt5():
@@ -507,10 +592,20 @@ def run_continuous_trading():
         mt5.shutdown()
         sys.exit(1)
 
+    # Start WebSocket server for dashboard
+    try:
+        websocket_task = asyncio.create_task(websocket_server.start_websocket_server())
+        await asyncio.sleep(1)  # Give server time to start
+    except Exception as e:
+        print(f"⚠️  Could not start WebSocket server: {e}")
+        print("   Continuing without dashboard support...")
+
     print(f"\n🔁 Starting continuous trading mode...")
     print(f"   Trade interval: {TRADE_INTERVAL} seconds")
     print(f"   Max concurrent trades: {MAX_CONCURRENT_TRADES}")
     print(f"   Press CTRL+C to stop gracefully\n")
+
+    websocket_server.add_dashboard_log("🚀 Bot started - continuous trading mode")
 
     iteration_count = 0
 
@@ -518,12 +613,23 @@ def run_continuous_trading():
         while running:
             iteration_count += 1
 
+            # Check if trading is paused by dashboard
+            if websocket_server.is_trading_paused():
+                print("⏸️  Trading paused by dashboard")
+                websocket_server.add_dashboard_action("Paused - waiting...")
+                await asyncio.sleep(5)  # Check every 5 seconds
+                await websocket_server.broadcast_dashboard_update()
+                continue
+
             # Perform trading iteration
             trading_iteration(SYMBOL)
 
             # Display open positions summary
             positions = get_open_positions()
             print(f"\n📊 Open positions: {len(positions)}/{MAX_CONCURRENT_TRADES}")
+
+            # Broadcast update to dashboard
+            await websocket_server.broadcast_dashboard_update()
 
             if not running:
                 break
@@ -535,13 +641,15 @@ def run_continuous_trading():
             for _ in range(TRADE_INTERVAL):
                 if not running:
                     break
-                time.sleep(1)
+                await asyncio.sleep(1)
 
     except Exception as e:
         print(f"\n❌ Error in trading loop: {e}")
+        websocket_server.add_dashboard_log(f"❌ Error: {str(e)}")
 
     finally:
         print(f"\n🔚 Shutting down after {iteration_count} iterations...")
+        websocket_server.add_dashboard_log("🔚 Bot shutting down...")
 
         # Generate and display performance report
         try:
@@ -555,6 +663,11 @@ def run_continuous_trading():
         print("\n   Closing MT5 connection...")
         mt5.shutdown()
         print("✅ Shutdown complete.")
+
+
+def run_continuous_trading():
+    """Wrapper to run async continuous trading."""
+    asyncio.run(run_continuous_trading_async())
 
 
 # ------------------------------
