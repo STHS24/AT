@@ -1,177 +1,85 @@
 # backtest.py
-import MetaTrader5 as mt5
-import pandas as pd
-import numpy as np
-import matplotlib.pyplot as plt
-from datetime import datetime
-from strategy import trade_decision
-import os
+from .backtest_runner import BacktestRunner
+from .backtrader_engine import run_backtrader_with_df, BTConfig
 
-# === CONFIG (mirrors live bot) ===
-SL_PIPS = 0.001       # 10 pips
-TP_PIPS = 0.002       # 20 pips
-TRAIL_PIPS = 0.001    # Same as SL for trailing
-VOLUME = 0.1
-PIP_VALUE = 10        # $10 per pip for 0.1 lot
-# =====================================
 
-def run_backtest(symbol="EURUSD", days=30, initial_balance=10000):
-    print(f"Backtesting {symbol} over last {days} days with SL/TP + TRAILING STOP...")
+def run_backtest():
+    """Main backtest function - Backtrader adapter path"""
+    runner = BacktestRunner(
+        symbol="EURUSD",
+        initial_balance=10000
+    )
 
-    # Initialize MT5
-    if not mt5.initialize():
-        print("MT5 init failed")
+    print("📡 Fetching market data...")
+    df = runner.fetch_data(days=65)
+    if df is None:
+        print("❌ No data fetched. Exiting.")
         return
-    if not mt5.symbol_select(symbol, True):
-        print(f"Symbol {symbol} not available")
-        mt5.shutdown()
-        return
+    if 'volume' not in df.columns:
+        if 'tick_volume' in df.columns:
+            df = df.rename(columns={'tick_volume': 'volume'})
+        elif 'real_volume' in df.columns:
+            df = df.rename(columns={'real_volume': 'volume'})
 
-    # Fetch data
-    from_ts = int((pd.Timestamp.now() - pd.Timedelta(days=days)).timestamp())
-    to_ts = int(datetime.now().timestamp())
-    rates = mt5.copy_rates_range(symbol, mt5.TIMEFRAME_M1, from_ts, to_ts)
-    mt5.shutdown()
+    print("🚀 Running Backtrader with RSI strategy...")
+    cerebro, results, analyzers = run_backtrader_with_df(
+        df=df,
+        strategy_name="rsi",
+        strategy_params={"rsi_period": 14, "oversold": 30, "overbought": 70},
+        config=BTConfig(symbol="EURUSD", cash=10000, stake=10000, sl_pips=0.001, tp_pips=0.002)
+    )
 
-    if rates is None or len(rates) < 100:
-        print("Not enough data")
-        return
+    # Zoomerified output summary
+    try:
+        sharpe = analyzers.get("sharpe", {})
+        dd = analyzers.get("drawdown", {})
+        trades = analyzers.get("trades", {})
+        
+        print("\n" + "✨" * 25)
+        print("📊 BACKTEST RESULTS 📊")
+        print("✨" * 25)
+        
+        final_value = cerebro.broker.getvalue()
+        profit_loss = final_value - 10000
+        pnl_percent = (profit_loss / 10000) * 100
+        pnl_emoji = "📈" if profit_loss > 0 else "📉" if profit_loss < 0 else "➖"
+        
+        print(f"💰 Final Portfolio: ${final_value:,.2f}")
+        print(f"🤑 P&L: {pnl_emoji} ${profit_loss:+,.2f} ({pnl_percent:+.2f}%)")
+        
+        if isinstance(sharpe, dict):
+            sharpe_val = sharpe.get('sharperatio', 'N/A')
+            print(f"🎯 Sharpe Ratio: {sharpe_val}")
+        
+        if isinstance(dd, dict):
+            max_dd = dd.get('max', {}).get('drawdown', 'N/A')
+            print(f"📉 Max Drawdown: {max_dd}%")
+        
+        if isinstance(trades, dict):
+            total_trades = trades.get('total', {}).get('total', 0)
+            won_trades = trades.get('won', {}).get('total', 0)
+            lost_trades = trades.get('lost', {}).get('total', 0)
+            win_rate = (won_trades / total_trades * 100) if total_trades > 0 else 0
+            
+            print(f"🎮 Total Trades: {total_trades}")
+            print(f"✅ Wins: {won_trades} | ❌ Losses: {lost_trades}")
+            print(f"🏆 Win Rate: {win_rate:.1f}%")
+        
+        # Vibe check
+        if profit_loss > 500:
+            print("\n💎🙌 BAG ALERT! Strategy is CRUSHING IT! 🚀")
+        elif profit_loss > 0:
+            print("\n😎 Solid gains! W strategy! 💯")
+        elif profit_loss > -200:
+            print("\n🤷‍♂️ Meh... Could be worse. Sideways vibe. 🎭")
+        else:
+            print("\n💀 RIP Portfolio... Time to touch grass 🌿")
+            
+        print("✨" * 25)
+        
+    except Exception as e:
+        print("❌ Could not print analyzers:", e)
 
-    df = pd.DataFrame(rates)
-    df['time'] = pd.to_datetime(df['time'], unit='s')
-
-    # Trading state
-    balance = initial_balance
-    position = None
-    entry_price = sl = tp = 0
-    trailing_active = False  # Becomes True after first trail
-    equity = []
-    trades = []
-
-    print(f"Starting backtest with ${balance:,.2f}...")
-
-    for i in range(20, len(df)):
-        window = df.iloc[i-20:i]
-        window_mt5 = window.to_records(index=False)
-        mt5.copy_rates_from_pos = lambda *_, **__: window_mt5
-
-        signal = trade_decision(symbol)
-        price = df.iloc[i]['close']
-        high = df.iloc[i]['high']
-        low = df.iloc[i]['low']
-
-        # === TRAILING STOP LOGIC (NEW) ===
-        if position == 'BUY' and position:
-            # Update SL if price moves up
-            new_sl = high - TRAIL_PIPS
-            if new_sl > sl:  # Only move SL up
-                sl = new_sl
-                trailing_active = True
-                print(f"Trailing SL ↑ to {sl:.5f}")
-
-        elif position == 'SELL' and position:
-            # Update SL if price moves down
-            new_sl = low + TRAIL_PIPS
-            if new_sl < sl:  # Only move SL down
-                sl = new_sl
-                trailing_active = True
-                print(f"Trailing SL ↓ to {sl:.5f}")
-        # ===================================
-
-        # === CLOSE ON SL/TP HIT (UPDATED TO USE TRAILING SL) ===
-        if position:
-            if position == 'BUY':
-                if low <= sl:
-                    profit = (sl - entry_price) * 100000 * VOLUME
-                    balance += profit
-                    reason = 'TRAIL_SL' if trailing_active else 'SL'
-                    trades.append({'type': reason, 'price': sl, 'profit': profit})
-                    print(f"{reason} hit @ {sl:.5f} → Profit: {profit:+.2f}")
-                    position = None
-                    trailing_active = False
-                elif high >= tp:
-                    profit = (tp - entry_price) * 100000 * VOLUME
-                    balance += profit
-                    trades.append({'type': 'TP', 'price': tp, 'profit': profit})
-                    print(f"TP hit @ {tp:.5f} → Profit: {profit:+.2f}")
-                    position = None
-                    trailing_active = False
-
-            elif position == 'SELL':
-                if high >= sl:
-                    profit = (entry_price - sl) * 100000 * VOLUME
-                    balance += profit
-                    reason = 'TRAIL_SL' if trailing_active else 'SL'
-                    trades.append({'type': reason, 'price': sl, 'profit': profit})
-                    print(f"{reason} hit @ {sl:.5f} → Profit: {profit:+.2f}")
-                    position = None
-                    trailing_active = False
-                elif low <= tp:
-                    profit = (entry_price - tp) * 100000 * VOLUME
-                    balance += profit
-                    trades.append({'type': 'TP', 'price': tp, 'profit': profit})
-                    print(f"TP hit @ {tp:.5f} → Profit: {profit:+.2f}")
-                    position = None
-                    trailing_active = False
-        # =======================================================
-
-        # === REVERSE ON SIGNAL ===
-        if position and (
-            (position == 'BUY' and signal == 'SELL') or
-            (position == 'SELL' and signal == 'BUY')
-        ):
-            close_price = price
-            profit = (close_price - entry_price) * (1 if position == 'BUY' else -1) * 100000 * VOLUME
-            balance += profit
-            trades.append({'type': 'REVERSE', 'price': close_price, 'profit': profit})
-            print(f"Reversed @ {close_price:.5f} → Profit: {profit:+.2f}")
-            position = None
-            trailing_active = False
-
-        # === OPEN NEW POSITION ===
-        if not position and signal in ['BUY', 'SELL']:
-            position = signal
-            entry_price = price
-            sl = price - SL_PIPS if signal == 'BUY' else price + SL_PIPS
-            tp = price + TP_PIPS if signal == 'BUY' else price - TP_PIPS
-            trailing_active = False  # Reset on new entry
-            trades.append({'type': 'OPEN', 'side': signal, 'price': entry_price, 'sl': sl, 'tp': tp})
-
-        equity.append(balance)
-
-    # === FINAL STATS ===
-    df['equity'] = equity + [equity[-1]] * (len(df) - len(equity))
-    total_return = (balance - initial_balance) / initial_balance * 100
-    closed_trades = [t for t in trades if t['type'] in ['SL', 'TRAIL_SL', 'TP', 'REVERSE']]
-    winning_trades = [t for t in closed_trades if t.get('profit', 0) > 0]
-    win_rate = len(winning_trades) / max(len(closed_trades), 1) * 100
-
-    print(f"\n{'='*60}")
-    print(f"BACKTEST COMPLETE WITH TRAILING STOP")
-    print(f"   Final Balance: ${balance:,.2f}")
-    print(f"   Total Return:  {total_return:+.2f}%")
-    print(f"   Win Rate:      {win_rate:.1f}%")
-    print(f"   Total Trades:  {len(closed_trades)}")
-    print(f"   Trailing Used: {any(t['type']=='TRAIL_SL' for t in trades)}")
-    print(f"{'='*60}")
-
-    # === PLOT ===
-    plt.figure(figsize=(14, 7))
-    plt.plot(df['time'], df['equity'], label='Equity Curve (with Trailing)', color='green', linewidth=2)
-    plt.title(f"Backtest: {symbol} | {total_return:+.2f}% | SL={SL_PIPS} TP={TP_PIPS} Trail={TRAIL_PIPS}")
-    plt.xlabel("Time")
-    plt.ylabel("Balance ($)")
-    plt.legend()
-    plt.grid(alpha=0.3)
-    plt.tight_layout()
-
-    os.makedirs("backtests", exist_ok=True)
-    plt.savefig(f"backtests/{symbol}_trailing_backtest.png", dpi=150)
-    plt.show()
-
-    # === SAVE TRADE LOG ===
-    pd.DataFrame(trades).to_csv(f"backtests/{symbol}_trades_trailing.csv", index=False)
-    print(f"Trade log saved to backtests/{symbol}_trades_trailing.csv")
 
 if __name__ == "__main__":
-    run_backtest(symbol="EURUSD", days=7)
+    run_backtest()
