@@ -27,15 +27,17 @@ public class WebSocketClient : IDisposable
         _uri = uri;
     }
 
-    public async Task StartAsync()
+    public Task StartAsync()
     {
         if (_isRunning)
-            return;
+            return Task.CompletedTask;
 
         _isRunning = true;
         _cancellationTokenSource = new CancellationTokenSource();
 
         _ = Task.Run(async () => await ConnectLoopAsync(_cancellationTokenSource.Token));
+
+        return Task.CompletedTask;
     }
 
     private async Task ConnectLoopAsync(CancellationToken cancellationToken)

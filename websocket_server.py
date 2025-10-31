@@ -18,8 +18,9 @@ RECENT_ACTIONS = []
 RECENT_LOGS = []
 MAX_DASHBOARD_ITEMS = 10
 
-# Trading control flag (shared with main.py)
+# Trading control flags (shared with main.py)
 TRADING_PAUSED = False
+SHUTDOWN_REQUESTED = False
 
 
 async def broadcast_status(status_data: dict):
@@ -58,23 +59,25 @@ async def handle_client(websocket):
                 command = command_data.get("command", "")
                 
                 print(f"[{datetime.now().strftime('%H:%M:%S')}] 📥 Received command: {command}")
-                
-                global TRADING_PAUSED
-                
+
+                global TRADING_PAUSED, SHUTDOWN_REQUESTED
+
                 if command == "pause":
                     TRADING_PAUSED = True
                     add_dashboard_log("⏸️ Trading PAUSED by dashboard")
                     print(f"[{datetime.now().strftime('%H:%M:%S')}] ⏸️  Trading PAUSED by dashboard")
-                    
+
                 elif command == "resume":
                     TRADING_PAUSED = False
                     add_dashboard_log("▶️ Trading RESUMED by dashboard")
                     print(f"[{datetime.now().strftime('%H:%M:%S')}] ▶️  Trading RESUMED by dashboard")
-                    
+
                 elif command == "stop":
+                    SHUTDOWN_REQUESTED = True
                     TRADING_PAUSED = True
-                    add_dashboard_log("⏹️ Trading STOPPED by dashboard")
-                    print(f"[{datetime.now().strftime('%H:%M:%S')}] ⏹️  Trading STOPPED by dashboard")
+                    add_dashboard_log("⏹️ Bot SHUTDOWN requested by dashboard")
+                    print(f"[{datetime.now().strftime('%H:%M:%S')}] ⏹️  Bot SHUTDOWN requested by dashboard")
+                    print(f"[{datetime.now().strftime('%H:%M:%S')}] 🛑 Initiating graceful shutdown...")
                 
                 # Send immediate update with new status
                 from main import get_current_status
@@ -152,6 +155,11 @@ def get_dashboard_status() -> str:
 def is_trading_paused() -> bool:
     """Check if trading is paused by dashboard"""
     return TRADING_PAUSED
+
+
+def is_shutdown_requested() -> bool:
+    """Check if shutdown was requested by dashboard"""
+    return SHUTDOWN_REQUESTED
 
 
 def get_recent_actions() -> list:

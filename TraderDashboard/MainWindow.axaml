@@ -13,37 +13,92 @@
         MinHeight="600">
 
     <Window.Styles>
+        <!-- Light Theme Styles -->
+        <Style Selector="Window">
+            <Setter Property="Background" Value="#FFFFFF"/>
+        </Style>
+
         <Style Selector="TextBlock.header">
             <Setter Property="FontSize" Value="16"/>
             <Setter Property="FontWeight" Value="Bold"/>
             <Setter Property="Margin" Value="0,0,0,8"/>
+            <Setter Property="Foreground" Value="#333333"/>
         </Style>
-        
+
         <Style Selector="TextBlock.value">
             <Setter Property="FontSize" Value="24"/>
             <Setter Property="FontWeight" Value="Bold"/>
+            <Setter Property="Foreground" Value="#000000"/>
         </Style>
-        
+
         <Style Selector="TextBlock.label">
             <Setter Property="FontSize" Value="12"/>
-            <Setter Property="Foreground" Value="#888"/>
+            <Setter Property="Foreground" Value="#888888"/>
         </Style>
-        
+
         <Style Selector="Border.card">
             <Setter Property="Background" Value="#F5F5F5"/>
             <Setter Property="CornerRadius" Value="8"/>
             <Setter Property="Padding" Value="16"/>
             <Setter Property="Margin" Value="4"/>
         </Style>
-        
+
         <Style Selector="Border.card:pointerover">
             <Setter Property="Background" Value="#EEEEEE"/>
         </Style>
-        
+
         <Style Selector="Button.control">
             <Setter Property="Padding" Value="16,8"/>
             <Setter Property="Margin" Value="4"/>
             <Setter Property="FontWeight" Value="SemiBold"/>
+        </Style>
+
+        <!-- Dark Theme Styles -->
+        <Style Selector="Window.dark">
+            <Setter Property="Background" Value="#1E1E1E"/>
+        </Style>
+
+        <Style Selector="Window.dark TextBlock.header">
+            <Setter Property="Foreground" Value="#FFFFFF"/>
+        </Style>
+
+        <Style Selector="Window.dark TextBlock.value">
+            <Setter Property="Foreground" Value="#FFFFFF"/>
+        </Style>
+
+        <Style Selector="Window.dark TextBlock.label">
+            <Setter Property="Foreground" Value="#AAAAAA"/>
+        </Style>
+
+        <Style Selector="Window.dark Border.card">
+            <Setter Property="Background" Value="#2D2D2D"/>
+        </Style>
+
+        <Style Selector="Window.dark Border.card:pointerover">
+            <Setter Property="Background" Value="#3D3D3D"/>
+        </Style>
+
+        <Style Selector="Window.dark Border.position-item">
+            <Setter Property="Background" Value="#252525"/>
+        </Style>
+
+        <Style Selector="Window.dark TextBlock">
+            <Setter Property="Foreground" Value="#FFFFFF"/>
+        </Style>
+
+        <Style Selector="Window.dark ScrollViewer">
+            <Setter Property="Background" Value="#2D2D2D"/>
+        </Style>
+
+        <Style Selector="Border.position-item">
+            <Setter Property="Background" Value="#FFFFFF"/>
+            <Setter Property="CornerRadius" Value="4"/>
+            <Setter Property="Padding" Value="12"/>
+            <Setter Property="Margin" Value="0,0,0,8"/>
+        </Style>
+
+        <Style Selector="ScrollViewer">
+            <Setter Property="Background" Value="Transparent"/>
         </Style>
     </Window.Styles>
 
@@ -114,21 +169,18 @@
                         <ItemsControl x:Name="PositionsTable">
                             <ItemsControl.ItemTemplate>
                                 <DataTemplate DataType="models:Position">
-                                    <Border Background="#FFFFFF" 
-                                            CornerRadius="4" 
-                                            Padding="12" 
-                                            Margin="0,0,0,8">
+                                    <Border Classes="position-item">
                                         <Grid ColumnDefinitions="*,Auto,Auto">
-                                            <TextBlock Grid.Column="0" 
-                                                       Text="{Binding Symbol}" 
+                                            <TextBlock Grid.Column="0"
+                                                       Text="{Binding Symbol}"
                                                        FontWeight="Bold"
                                                        FontSize="14"/>
-                                            <TextBlock Grid.Column="1" 
-                                                       Text="{Binding SideDisplay}" 
+                                            <TextBlock Grid.Column="1"
+                                                       Text="{Binding SideDisplay}"
                                                        FontSize="12"
                                                        Margin="8,0"/>
-                                            <TextBlock Grid.Column="2" 
-                                                       Text="{Binding ProfitDisplay}" 
+                                            <TextBlock Grid.Column="2"
+                                                       Text="{Binding ProfitDisplay}"
                                                        FontWeight="SemiBold"
                                                        FontSize="14"/>
                                         </Grid>
@@ -138,9 +190,9 @@
                         </ItemsControl>
                     </ScrollViewer>
                     
-                    <TextBlock x:Name="NoPositionsText" 
-                               Text="No open positions" 
-                               Foreground="#888"
+                    <TextBlock x:Name="NoPositionsText"
+                               Classes="label"
+                               Text="No open positions"
                                HorizontalAlignment="Center"
                                Margin="0,20"/>
                 </StackPanel>

@@ -585,6 +585,8 @@ async def run_continuous_trading_async():
     """Run continuous trading loop with WebSocket dashboard support."""
     global running
 
+    websocket_task = None
+
     if not initialize_mt5():
         sys.exit(1)
 
@@ -631,7 +633,12 @@ async def run_continuous_trading_async():
             # Broadcast update to dashboard
             await websocket_server.broadcast_dashboard_update()
 
-            if not running:
+            # Check if we should stop (CTRL+C or dashboard stop)
+            if not running or websocket_server.is_shutdown_requested():
+                if websocket_server.is_shutdown_requested():
+                    print(f"\n🛑 Shutdown requested by dashboard after {iteration_count} iterations...")
+                else:
+                    print(f"\n🔚 Shutting down after {iteration_count} iterations...")
                 break
 
             # Wait for next iteration
@@ -639,7 +646,7 @@ async def run_continuous_trading_async():
 
             # Sleep in small increments to allow for responsive shutdown
             for _ in range(TRADE_INTERVAL):
-                if not running:
+                if not running or websocket_server.is_shutdown_requested():
                     break
                 await asyncio.sleep(1)
 
@@ -648,6 +655,15 @@ async def run_continuous_trading_async():
         websocket_server.add_dashboard_log(f"❌ Error: {str(e)}")
 
     finally:
+        # Cancel WebSocket server task
+        if websocket_task and not websocket_task.done():
+            print("\n   Stopping WebSocket server...")
+            websocket_task.cancel()
+            try:
+                await websocket_task
+            except asyncio.CancelledError:
+                pass
+
         print(f"\n🔚 Shutting down after {iteration_count} iterations...")
         websocket_server.add_dashboard_log("🔚 Bot shutting down...")
 
@@ -667,7 +683,13 @@ async def run_continuous_trading_async():
 
 def run_continuous_trading():
     """Wrapper to run async continuous trading."""
-    asyncio.run(run_continuous_trading_async())
+    try:
+        asyncio.run(run_continuous_trading_async())
+    except KeyboardInterrupt:
+        print("\n\n⚠️  KeyboardInterrupt received - shutting down gracefully...")
+    except Exception as e:
+        print(f"\n\n❌ Unexpected error: {e}")
+        raise
 
 
 # ------------------------------

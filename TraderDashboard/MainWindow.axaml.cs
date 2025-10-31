@@ -24,12 +24,16 @@ public partial class MainWindow : Window
     private readonly ObservableCollection<double> _equityValues = new();
     private readonly int _maxLogEntries = 100;
     private readonly int _maxEquityPoints = 100;
-    private bool _isDarkMode = false;
+    private bool _isDarkMode = true; // Start with dark mode
+    private LineSeries<double>? _equitySeries;
 
     public MainWindow()
     {
         InitializeComponent();
-        
+
+        // Apply dark theme by default
+        Classes.Add("dark");
+
         // Initialize WebSocket client
         _webSocketClient = new WebSocketClient("ws://localhost:5000");
         _webSocketClient.MessageReceived += OnMessageReceived;
@@ -55,16 +59,16 @@ public partial class MainWindow : Window
 
     private void InitializeEquityChart()
     {
-        var series = new LineSeries<double>
+        _equitySeries = new LineSeries<double>
         {
             Values = _equityValues,
             Fill = null,
             GeometrySize = 0,
             LineSmoothness = 0.5,
-            Stroke = new SolidColorPaint(SKColors.DodgerBlue) { StrokeThickness = 2 }
+            Stroke = new SolidColorPaint(SKColors.LimeGreen) { StrokeThickness = 3 }
         };
 
-        EquityChart.Series = new ISeries[] { series };
+        EquityChart.Series = new ISeries[] { _equitySeries };
         EquityChart.XAxes = new[]
         {
             new Axis
@@ -77,10 +81,13 @@ public partial class MainWindow : Window
             new Axis
             {
                 Name = "Equity ($)",
-                NamePaint = new SolidColorPaint(SKColors.Gray),
-                LabelsPaint = new SolidColorPaint(SKColors.Gray)
+                NamePaint = new SolidColorPaint(_isDarkMode ? SKColors.LightGray : SKColors.Gray),
+                LabelsPaint = new SolidColorPaint(_isDarkMode ? SKColors.LightGray : SKColors.Gray)
             }
         };
+
+        // Set chart background for dark mode
+        EquityChart.Background = _isDarkMode ? new SolidColorBrush(Color.FromRgb(45, 45, 45)) : Brushes.White;
     }
 
     private void OnMessageReceived(object? sender, BotStatus status)
@@ -146,6 +153,16 @@ public partial class MainWindow : Window
         while (_equityValues.Count > _maxEquityPoints)
         {
             _equityValues.RemoveAt(0);
+        }
+
+        // Update chart color based on trend (green if going up, red if going down)
+        if (_equityValues.Count >= 2 && _equitySeries != null)
+        {
+            var lastValue = _equityValues[_equityValues.Count - 1];
+            var previousValue = _equityValues[_equityValues.Count - 2];
+
+            var color = lastValue >= previousValue ? SKColors.LimeGreen : SKColors.Red;
+            _equitySeries.Stroke = new SolidColorPaint(color) { StrokeThickness = 3 };
         }
     }
 
@@ -229,16 +246,44 @@ public partial class MainWindow : Window
     private void OnThemeToggleClick(object? sender, RoutedEventArgs e)
     {
         _isDarkMode = !_isDarkMode;
-        
+
         if (_isDarkMode)
         {
-            Application.Current!.RequestedThemeVariant = Avalonia.Styling.ThemeVariant.Dark;
+            Classes.Add("dark");
             ThemeToggle.Content = "☀️ LIGHT MODE";
+            EquityChart.Background = new SolidColorBrush(Color.FromRgb(45, 45, 45));
+
+            // Update chart axis colors
+            if (EquityChart.YAxes != null)
+            {
+                foreach (var axis in EquityChart.YAxes)
+                {
+                    if (axis is Axis concreteAxis)
+                    {
+                        concreteAxis.NamePaint = new SolidColorPaint(SKColors.LightGray);
+                        concreteAxis.LabelsPaint = new SolidColorPaint(SKColors.LightGray);
+                    }
+                }
+            }
         }
         else
         {
-            Application.Current!.RequestedThemeVariant = Avalonia.Styling.ThemeVariant.Light;
+            Classes.Remove("dark");
             ThemeToggle.Content = "🌙 DARK MODE";
+            EquityChart.Background = Brushes.White;
+
+            // Update chart axis colors
+            if (EquityChart.YAxes != null)
+            {
+                foreach (var axis in EquityChart.YAxes)
+                {
+                    if (axis is Axis concreteAxis)
+                    {
+                        concreteAxis.NamePaint = new SolidColorPaint(SKColors.Gray);
+                        concreteAxis.LabelsPaint = new SolidColorPaint(SKColors.Gray);
+                    }
+                }
+            }
         }
     }
 }
