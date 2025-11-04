@@ -2,11 +2,13 @@
  * Main App Component - Focused on Bot Performance & Decisions
  */
 
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { useWebSocket } from './hooks/useWebSocket';
 import BotControl from './components/BotControl';
 import OpenPositions from './components/OpenPositions';
 import LogViewer from './components/LogViewer';
+
+const NOTIFICATION_TIMEOUT = 10000; // 10 seconds
 
 function App() {
   const {
@@ -15,6 +17,27 @@ function App() {
     logEvents,
     botStatus,
   } = useWebSocket();
+
+  // Filter out old trade executions (older than 10 seconds)
+  const [visibleTrades, setVisibleTrades] = useState([]);
+
+  useEffect(() => {
+    const now = Date.now();
+    const filtered = tradeExecutions.filter(
+      trade => (now - trade.receivedAt) < NOTIFICATION_TIMEOUT
+    );
+    setVisibleTrades(filtered);
+
+    // Set up interval to clean up old notifications
+    const interval = setInterval(() => {
+      const currentTime = Date.now();
+      setVisibleTrades(prev =>
+        prev.filter(trade => (currentTime - trade.receivedAt) < NOTIFICATION_TIMEOUT)
+      );
+    }, 1000); // Check every second
+
+    return () => clearInterval(interval);
+  }, [tradeExecutions]);
 
   return (
     <div className="min-h-screen bg-slate-900">
@@ -60,9 +83,9 @@ function App() {
         </div>
 
         {/* Trade Executions Notifications */}
-        {tradeExecutions.length > 0 && (
+        {visibleTrades.length > 0 && (
           <div className="fixed bottom-4 right-4 max-w-md space-y-2 z-50">
-            {tradeExecutions.slice(0, 3).map((trade, index) => (
+            {visibleTrades.slice(0, 3).map((trade, index) => (
               <div
                 key={`${trade.ticket}-${index}`}
                 className={`card ${

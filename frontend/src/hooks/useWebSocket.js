@@ -43,7 +43,12 @@ export const useWebSocket = () => {
               break;
             
             case 'trade_execution':
-              setTradeExecutions(prev => [message.data, ...prev].slice(0, 50));
+              // Add timestamp for auto-dismiss
+              const tradeWithTimestamp = {
+                ...message.data,
+                receivedAt: Date.now()
+              };
+              setTradeExecutions(prev => [tradeWithTimestamp, ...prev].slice(0, 50));
               break;
             
             case 'log_event':
