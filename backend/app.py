@@ -4,6 +4,7 @@ FastAPI Application for TraderBot
 Provides REST API and WebSocket endpoints for controlling and monitoring the trading bot.
 """
 
+import asyncio
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Depends, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -64,18 +65,23 @@ async def shutdown_event():
 async def start_bot(request: BotStartRequest):
     """
     Start the trading bot.
-    
+
     - **symbol**: Trading symbol (optional, uses config default)
     - **trade_interval**: Trade interval in seconds (optional, uses config default)
     """
+    # Get the currently running event loop (best practice for async functions)
+    # asyncio.get_running_loop() is preferred over asyncio.get_event_loop() in async contexts
+    loop = asyncio.get_running_loop()
+
     result = bot_manager.start(
         symbol=request.symbol,
-        trade_interval=request.trade_interval
+        trade_interval=request.trade_interval,
+        event_loop=loop
     )
-    
+
     if not result["success"]:
         raise HTTPException(status_code=400, detail=result["message"])
-    
+
     return BotStartResponse(
         success=result["success"],
         message=result["message"],
