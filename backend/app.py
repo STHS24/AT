@@ -142,30 +142,37 @@ async def get_account_stats():
 @app.get("/stats/positions", response_model=List[PositionResponse], tags=["Statistics"])
 async def get_positions():
     """Get current open positions."""
-    positions = mt5.positions_get()
-    
-    if positions is None:
+    try:
+        positions = mt5.positions_get()
+
+        if positions is None or len(positions) == 0:
+            return []
+
+        result = []
+        for pos in positions:
+            # MT5 TradePosition doesn't have commission attribute directly
+            # Commission is calculated separately or stored in deals
+            # Use getattr with default value for safety
+            result.append(PositionResponse(
+                ticket=pos.ticket,
+                symbol=pos.symbol,
+                type="BUY" if pos.type == mt5.POSITION_TYPE_BUY else "SELL",
+                volume=pos.volume,
+                price_open=pos.price_open,
+                price_current=pos.price_current,
+                sl=pos.sl,
+                tp=pos.tp,
+                profit=pos.profit,
+                swap=getattr(pos, 'swap', 0.0),  # Safe access with default
+                commission=0.0,  # Commission not available in position, only in deals
+                time=datetime.fromtimestamp(pos.time),
+                comment=getattr(pos, 'comment', '')  # Safe access with default
+            ))
+
+        return result
+    except Exception as e:
+        print(f"[API] Error getting positions: {e}")
         return []
-    
-    result = []
-    for pos in positions:
-        result.append(PositionResponse(
-            ticket=pos.ticket,
-            symbol=pos.symbol,
-            type="BUY" if pos.type == mt5.POSITION_TYPE_BUY else "SELL",
-            volume=pos.volume,
-            price_open=pos.price_open,
-            price_current=pos.price_current,
-            sl=pos.sl,
-            tp=pos.tp,
-            profit=pos.profit,
-            swap=pos.swap,
-            commission=pos.commission,
-            time=datetime.fromtimestamp(pos.time),
-            comment=pos.comment
-        ))
-    
-    return result
 
 
 @app.get("/stats/strategies", response_model=StrategyStatsResponse, tags=["Statistics"])

@@ -3,7 +3,7 @@
   "volume": 0.1,
   "deviation": 50,
   "trade_interval_seconds": 60,
-  "max_concurrent_trades": 10,
+  "max_concurrent_trades": 5,
   "enable_continuous_trading": true,
 
   "strategy_config": {

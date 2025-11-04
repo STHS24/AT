@@ -154,16 +154,27 @@ class BotManager:
         Uses asyncio.run_coroutine_threadsafe() which is the correct way to schedule
         coroutines from a different thread into a specific event loop.
         """
-        if self._event_loop and not self._event_loop.is_closed():
-            try:
-                # Schedule the coroutine in the main event loop and wait for result
-                future = asyncio.run_coroutine_threadsafe(coro, self._event_loop)
-                # Wait for completion with timeout to avoid blocking forever
-                future.result(timeout=5.0)
-            except Exception as e:
-                print(f"[BotManager] Error scheduling async task: {e}")
-        else:
-            print("[BotManager] Warning: Event loop not available for async scheduling")
+        if not self._event_loop or self._event_loop.is_closed():
+            # Event loop not available - silently skip (bot is stopping or not started properly)
+            return
+
+        try:
+            # Schedule the coroutine in the main event loop
+            future = asyncio.run_coroutine_threadsafe(coro, self._event_loop)
+            # Wait for completion with timeout to avoid blocking forever
+            # Don't wait if we're stopping to avoid deadlocks
+            if not self._stop_flag:
+                future.result(timeout=3.0)
+        except TimeoutError:
+            # Timeout is acceptable - don't block the bot thread
+            pass
+        except RuntimeError as e:
+            # Event loop might be closed during shutdown - this is expected
+            if "Event loop is closed" not in str(e):
+                print(f"[BotManager] Runtime error scheduling async task: {e}")
+        except Exception as e:
+            # Log other unexpected errors but don't crash
+            print(f"[BotManager] Error scheduling async task: {type(e).__name__}: {e}")
 
     async def _broadcast_price_update(self, symbol: str):
         """Broadcast current price to WebSocket clients."""
@@ -262,15 +273,15 @@ class BotManager:
             # Get strategy name from manager
             strategy_name = self.strategy_manager.get_last_strategy_used() if hasattr(self.strategy_manager, 'get_last_strategy_used') else "Combined"
 
-            # Log trade
-            self.trade_logger.log_trade(
-                action=action,
+            # Log trade using correct method signature
+            self.trade_logger.log_trade_open(
                 symbol=symbol,
+                action=action,
+                result=result,
                 volume=volume,
-                price=result.price,
+                entry_price=result.price,
                 sl=sl,
                 tp=tp,
-                ticket=result.order,
                 strategy=strategy_name
             )
 
@@ -355,7 +366,7 @@ class BotManager:
     
     def _bot_loop(self, symbol: str, interval: int):
         """Main bot loop running in separate thread."""
-        print(f"[BotManager] Bot loop started for {symbol}")
+        print(f"[BotManager] Bot loop started for {symbol} with interval {interval}s")
 
         while not self._stop_flag:
             try:
@@ -366,13 +377,14 @@ class BotManager:
                 self._schedule_async(self._broadcast_price_update(symbol))
 
                 # Sleep in small increments for responsive shutdown
+                # This allows the bot to stop quickly even with long intervals
                 for _ in range(interval):
                     if self._stop_flag:
                         break
                     threading.Event().wait(1)
 
             except Exception as e:
-                print(f"[BotManager] Error in bot loop: {e}")
+                print(f"[BotManager] Error in bot loop: {type(e).__name__}: {e}")
                 self._schedule_async(self._broadcast_log("ERROR", f"Bot error: {str(e)}"))
 
         print("[BotManager] Bot loop stopped")
@@ -446,7 +458,12 @@ class BotManager:
             return {"success": False, "message": "Bot is not running"}
 
         print("[BotManager] Stopping bot...")
-        self._schedule_async(self._broadcast_log("INFO", "Stopping bot..."))
+
+        # Try to broadcast stop message, but don't fail if event loop is unavailable
+        try:
+            self._schedule_async(self._broadcast_log("INFO", "Stopping bot..."))
+        except Exception as e:
+            print(f"[BotManager] Could not broadcast stop message: {e}")
 
         # Set stop flag
         self._stop_flag = True
@@ -455,13 +472,25 @@ class BotManager:
 
         # Wait for thread to finish
         if self.bot_thread and self.bot_thread.is_alive():
+            print("[BotManager] Waiting for bot thread to finish...")
             self.bot_thread.join(timeout=10)
+            if self.bot_thread.is_alive():
+                print("[BotManager] Warning: Bot thread did not finish in time")
 
         # Shutdown MT5
-        mt5.shutdown()
+        try:
+            mt5.shutdown()
+            print("[BotManager] MT5 connection closed")
+        except Exception as e:
+            print(f"[BotManager] Error closing MT5: {e}")
 
         print("[BotManager] Bot stopped")
-        self._schedule_async(self._broadcast_log("INFO", "Bot stopped"))
+
+        # Try to broadcast stopped message, but don't fail if event loop is unavailable
+        try:
+            self._schedule_async(self._broadcast_log("INFO", "Bot stopped"))
+        except Exception as e:
+            print(f"[BotManager] Could not broadcast stopped message: {e}")
 
         return {
             "success": True,

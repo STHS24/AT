@@ -11,6 +11,11 @@ __pycache__/
 *$py.class
 *.so
 
+# .md files
+GUI_LAYOUT.md
+ARCHITECTURE_WORKFLOW.
+ROADMAP.md
+
 # Distribution / packaging
 .Python
 build/
