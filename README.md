@@ -1,16 +1,93 @@
-# TraderBot Usage Guide
+# TraderBot - MetaTrader 5 Automated Trading System
 
-Complete guide for using the TraderBot MetaTrader 5 automated trading system.
+Complete automated trading system with **FastAPI backend**, **React frontend**, and **SQLite database** for local trading workstation.
 
-## Table of Contents
+## 🚀 Quick Start
+
+### Full Stack Mode (Recommended)
+
+1. **Setup** (one-time):
+   ```bash
+   setup-all.bat
+   ```
+
+2. **Start Backend** (Terminal 1):
+   ```bash
+   start-backend.bat
+   ```
+
+3. **Start Frontend** (Terminal 2):
+   ```bash
+   start-frontend.bat
+   ```
+
+4. **Access Dashboard**: http://localhost:3000
+
+### Standalone Bot Mode
+
+```bash
+python main.py
+```
+
+## 📋 Table of Contents
+- [Architecture](#architecture)
+- [Features](#features)
 - [Installation](#installation)
 - [Configuration](#configuration)
 - [Trading Strategies](#trading-strategies)
 - [Running the Bot](#running-the-bot)
+- [API & WebSocket](#api--websocket)
 - [Trading Modes](#trading-modes)
 - [Monitoring](#monitoring)
 - [Safety Features](#safety-features)
 - [Troubleshooting](#troubleshooting)
+
+## 🏗️ Architecture
+
+```
+TraderBot/
+├── backend/              # FastAPI REST + WebSocket API
+├── frontend/             # React + Tailwind Dashboard
+├── strategies/           # Trading strategies
+├── config/               # Configuration
+├── logs/                 # Logs + SQLite database
+└── main.py              # Standalone bot
+```
+
+### Technology Stack
+
+**Backend:**
+- FastAPI (REST API + WebSocket)
+- SQLAlchemy (Async ORM)
+- SQLite (Database)
+- MetaTrader5 (Trading API)
+
+**Frontend:**
+- React 18
+- Tailwind CSS
+- React Query (Data fetching)
+- WebSocket (Real-time updates)
+- Recharts (Charts)
+
+## ✨ Features
+
+### Web Dashboard
+- 🎮 **Bot Control** - Start/stop bot with live status
+- 📊 **Live Price Feed** - Real-time bid/ask prices via WebSocket
+- 💰 **Account Stats** - Balance, equity, margin, profit
+- 📈 **Open Positions** - Active trades with P&L
+- 📜 **Trade History** - Paginated trade log with filters
+- 🔔 **Live Logs** - Real-time event stream
+- 📱 **Responsive Design** - Works on desktop and mobile
+
+### Trading Features
+- 🤖 **Multiple Strategies** - Simple, MA, RSI, MACD
+- 🎯 **Strategy Combination** - Majority, unanimous, weighted, any
+- 🛡️ **Risk Management** - Dynamic lot sizing, SL/TP, daily limits
+- 📊 **Performance Analytics** - Win rate, profit factor, statistics
+- 💾 **Persistent Storage** - SQLite database for trade history
+- 🔄 **Continuous Trading** - Automated trading loop
+- ⚡ **Real-time Updates** - WebSocket streaming
 
 ## Installation
 
@@ -343,18 +420,35 @@ For detailed information about each strategy, see [`strategies/README.md`](strat
 
 ## Running the Bot
 
-### Single Trade Mode (Default)
+### Full Stack Mode (Web Dashboard)
 
-Execute one trade and exit:
+**1. Start Backend:**
+```bash
+start-backend.bat
+```
+Backend runs on http://localhost:5000
 
+**2. Start Frontend:**
+```bash
+start-frontend.bat
+```
+Dashboard available at http://localhost:3000
+
+**3. Control via Dashboard:**
+- Click "Start Bot" to begin trading
+- Monitor live prices, positions, and logs
+- View trade history and statistics
+- Stop bot when needed
+
+### Standalone Mode
+
+**Single Trade Mode:**
 ```bash
 python main.py
 ```
+Execute one trade and exit.
 
-**Use case**: Testing, manual control, scheduled tasks
-
-### Continuous Trading Mode
-
+**Continuous Trading Mode:**
 Enable in `config/settings.json`:
 ```json
 {
@@ -367,7 +461,52 @@ Then run:
 python main.py
 ```
 
-**Use case**: Automated 24/7 trading
+## API & WebSocket
+
+### REST API Endpoints
+
+**Bot Control:**
+- `POST /bot/start` - Start trading bot
+- `POST /bot/stop` - Stop trading bot
+- `GET /bot/status` - Get bot status
+
+**Statistics:**
+- `GET /stats/account` - Account information
+- `GET /stats/positions` - Open positions
+- `GET /stats/strategies` - Strategy configuration
+
+**History:**
+- `GET /history/trades?page=1&page_size=50` - Trade history
+
+**System:**
+- `GET /health` - Health check
+- `GET /docs` - Interactive API documentation
+
+### WebSocket Events
+
+Connect to `ws://localhost:5000/ws` for real-time updates:
+
+**Message Types:**
+- `price_update` - Live price data
+- `trade_execution` - Trade executions
+- `log_event` - Log messages
+- `bot_status` - Bot status changes
+
+**Example Message:**
+```json
+{
+  "type": "price_update",
+  "data": {
+    "symbol": "EURUSD",
+    "bid": 1.08450,
+    "ask": 1.08452,
+    "last": 1.08451,
+    "volume": 1000,
+    "time": "2025-10-31T12:00:00"
+  },
+  "timestamp": "2025-10-31T12:00:00.123456"
+}
+```
 
 ### Stopping the Bot
 

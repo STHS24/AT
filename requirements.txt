@@ -1,3 +1,19 @@
 MetaTrader5>=5.0.45
 pandas>=2.3.3
 pytest>=8.4.2
+
+# FastAPI Backend
+fastapi>=0.115.0
+uvicorn[standard]>=0.32.0
+websockets>=13.1
+python-multipart>=0.0.12
+pydantic>=2.10.0
+pydantic-settings>=2.6.0
+
+# Database
+sqlalchemy>=2.0.36
+aiosqlite>=0.20.0
+
+# Utilities
+python-dateutil>=2.9.0
+pytz>=2024.2

@@ -1,0 +1,71 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  font-family: Inter, system-ui, Avenir, Helvetica, Arial, sans-serif;
+  line-height: 1.5;
+  font-weight: 400;
+
+  color-scheme: light dark;
+  color: rgba(255, 255, 255, 0.87);
+  background-color: #0f172a;
+
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
+}
+
+@layer components {
+  .card {
+    @apply bg-slate-800 rounded-lg shadow-lg p-6 border border-slate-700;
+  }
+  
+  .btn {
+    @apply px-4 py-2 rounded-lg font-medium transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+  
+  .btn-primary {
+    @apply btn bg-primary-600 hover:bg-primary-700 text-white;
+  }
+  
+  .btn-secondary {
+    @apply btn bg-slate-700 hover:bg-slate-600 text-white;
+  }
+  
+  .btn-success {
+    @apply btn bg-green-600 hover:bg-green-700 text-white;
+  }
+  
+  .btn-danger {
+    @apply btn bg-red-600 hover:bg-red-700 text-white;
+  }
+  
+  .badge {
+    @apply px-2 py-1 rounded text-xs font-semibold;
+  }
+  
+  .badge-success {
+    @apply badge bg-green-600 text-white;
+  }
+  
+  .badge-danger {
+    @apply badge bg-red-600 text-white;
+  }
+  
+  .badge-warning {
+    @apply badge bg-yellow-600 text-white;
+  }
+  
+  .badge-info {
+    @apply badge bg-blue-600 text-white;
+  }
+}
+
