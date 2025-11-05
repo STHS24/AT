@@ -12,7 +12,8 @@ from strategies import (
     MAStrategy,
     RSIStrategy,
     MACDStrategy,
-    StrategyManager
+    StrategyManager,
+    AIStrategy
 )
 
 # Import risk management
@@ -96,7 +97,8 @@ def initialize_strategies():
         "SimpleStrategy": SimpleStrategy,
         "MAStrategy": MAStrategy,
         "RSIStrategy": RSIStrategy,
-        "MACDStrategy": MACDStrategy
+        "MACDStrategy": MACDStrategy,
+        "AIStrategy": AIStrategy
     }
 
     # Initialize each configured strategy
@@ -110,6 +112,11 @@ def initialize_strategies():
         params = strategy_settings.get("params", {}).copy()
         if "timeframe" in params and isinstance(params["timeframe"], str):
             params["timeframe"] = timeframe_map.get(params["timeframe"], mt5.TIMEFRAME_M5)
+
+        # Special handling for AIStrategy - needs risk_manager and config
+        if strategy_name == "AIStrategy":
+            params["risk_manager"] = None  # Will be set after RISK_MANAGER is initialized
+            params["config"] = config
 
         # Create strategy instance
         strategy = strategy_class(params)
@@ -140,6 +147,13 @@ print(f"[Config] Risk Manager initialized")
 print(f"[Config] Risk per trade: {RISK_MANAGER.risk_percentage}%")
 print(f"[Config] SL/TP method: {RISK_MANAGER.sl_method}/{RISK_MANAGER.tp_method}")
 print(f"[Config] Daily limits: Loss=${RISK_MANAGER.daily_loss_limit}, Profit=${RISK_MANAGER.daily_profit_target}")
+
+# Update AIStrategy instances with risk manager
+for strategy in STRATEGY_MANAGER.strategies:
+    if isinstance(strategy, AIStrategy):
+        strategy.params["risk_manager"] = RISK_MANAGER
+        strategy.market_analyzer.risk_manager = RISK_MANAGER
+        print(f"[Config] Updated {strategy.name} with Risk Manager")
 
 # Initialize Trade Logger and Analytics
 TRADE_LOGGER = TradeLogger()

@@ -1,9 +1,21 @@
 # TraderBot Usage Guide
 
-Complete guide for using the TraderBot MetaTrader 5 automated trading system.
+Complete guide for using the TraderBot MetaTrader 5 automated trading system with **AI-Powered Decision Making**.
+
+## 🤖 AI-Powered Trading
+
+**NEW in v0.7.0**: TraderBot now uses Large Language Models (LLMs) to make intelligent trading decisions based on comprehensive market analysis, replacing traditional signal-based strategies.
+
+### Key Features
+- **Holistic Analysis**: AI considers all market factors simultaneously
+- **Explainable Decisions**: Every trade includes detailed reasoning
+- **Adaptive**: No manual strategy tuning required
+- **Risk-Aware**: AI respects all risk management rules
+- **Multi-Timeframe**: Analyzes M1, M5, M15, and H1 data together
 
 ## Table of Contents
 - [Installation](#installation)
+- [AI Strategy Configuration](#ai-strategy-configuration)
 - [Configuration](#configuration)
 - [Trading Strategies](#trading-strategies)
 - [Running the Bot](#running-the-bot)
@@ -51,6 +63,153 @@ Complete guide for using the TraderBot MetaTrader 5 automated trading system.
    ```bash
    pytest tests/ -v
    ```
+
+## AI Strategy Configuration
+
+### Overview
+
+The AI Strategy uses OpenRouter API to access Large Language Models (LLMs) for trading decisions. The AI analyzes comprehensive market data including:
+
+- **Current Price**: Bid, ask, spread
+- **Technical Indicators**: RSI, MACD, Moving Averages, ATR, Bollinger Bands
+- **Multi-Timeframe Analysis**: M1, M5, M15, H1 price action and trends
+- **Current Positions**: Open trades, P/L, pip calculations
+- **Account Status**: Balance, equity, margin, daily P/L
+- **Risk Constraints**: Risk limits, exposure, remaining capacity
+
+### Configuration Parameters
+
+The AI strategy is configured in `config/settings.json` under `strategy_config.AIStrategy`:
+
+```json
+{
+  "strategy_config": {
+    "combination_method": "majority",
+    "enabled_strategies": ["AIStrategy"],
+
+    "AIStrategy": {
+      "enabled": true,
+      "weight": 1.0,
+      "params": {
+        "api_key": "your-openrouter-api-key",
+        "model": "deepseek/deepseek-chat-v3.1:free",
+        "confidence_threshold": 0.7,
+        "temperature": 0.7,
+        "timeout": 30,
+        "max_retries": 3
+      }
+    }
+  }
+}
+```
+
+### AI Strategy Parameters
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `api_key` | string | Required | OpenRouter API key for LLM access |
+| `model` | string | "deepseek/deepseek-chat-v3.1:free" | LLM model to use (free tier available) |
+| `confidence_threshold` | float | 0.7 | Minimum confidence (0.0-1.0) required to execute trade |
+| `temperature` | float | 0.7 | LLM creativity parameter (0.0=deterministic, 1.0=creative) |
+| `timeout` | integer | 30 | API request timeout in seconds |
+| `max_retries` | integer | 3 | Maximum retry attempts for failed API calls |
+
+### Getting an API Key
+
+1. **Sign up at OpenRouter**: Visit [https://openrouter.ai/](https://openrouter.ai/)
+2. **Create API Key**: Go to Keys section and generate a new API key
+3. **Free Tier Available**: DeepSeek model is free to use
+4. **Add to Config**: Copy the API key to `config/settings.json`
+
+**Current API Key** (included in config):
+```
+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
+```
+
+### How AI Makes Decisions
+
+1. **Data Collection**: Market Analyzer gathers comprehensive market context
+2. **Prompt Building**: LLM Client formats data into structured prompt
+3. **AI Analysis**: LLM analyzes all factors and provides decision
+4. **Confidence Check**: Decision filtered based on confidence threshold
+5. **Execution**: High-confidence decisions passed to trading system
+6. **Logging**: All decisions and reasoning logged to `logs/ai_decisions.jsonl`
+
+### AI Response Format
+
+The AI returns structured decisions:
+
+```json
+{
+  "decision": "BUY",
+  "reasoning": "Strong bullish momentum with RSI oversold at 28, MACD showing bullish crossover, and uptrend confirmed across M5 and M15 timeframes. Price bounced off lower Bollinger Band indicating potential reversal.",
+  "confidence": 0.85,
+  "key_factors": [
+    "RSI oversold (28) indicating potential reversal",
+    "MACD bullish crossover on M5",
+    "Price at lower Bollinger Band support",
+    "Uptrend confirmed on M15 timeframe"
+  ]
+}
+```
+
+### Confidence Threshold
+
+The `confidence_threshold` parameter filters out low-confidence trades:
+
+- **0.7 (Default)**: Only trades when AI is 70%+ confident
+- **0.8 (Conservative)**: Higher threshold, fewer but higher quality trades
+- **0.6 (Aggressive)**: Lower threshold, more trades but potentially lower quality
+
+**Recommendation**: Start with 0.7 and adjust based on performance.
+
+### Monitoring AI Decisions
+
+All AI decisions are logged to `logs/ai_decisions.jsonl` with:
+- Timestamp
+- Symbol
+- Decision (BUY/SELL/NONE)
+- Reasoning
+- Confidence score
+- Key factors
+- Model used
+- Market context
+
+**Example log entry**:
+```json
+{
+  "timestamp": "2025-11-05T10:30:45",
+  "symbol": "EURUSD",
+  "decision": "BUY",
+  "reasoning": "Strong bullish signals...",
+  "confidence": 0.85,
+  "key_factors": ["RSI oversold", "MACD bullish"],
+  "model": "deepseek/deepseek-chat-v3.1:free",
+  "market_context": {...}
+}
+```
+
+### Switching Between AI and Traditional Strategies
+
+To switch back to traditional strategies, update `config/settings.json`:
+
+```json
+{
+  "strategy_config": {
+    "enabled_strategies": ["SimpleStrategy", "MAStrategy", "RSIStrategy"],
+
+    "AIStrategy": {
+      "enabled": false,
+      ...
+    },
+
+    "SimpleStrategy": {
+      "enabled": true,
+      ...
+    }
+  }
+}
+```
 
 ## Configuration
 

@@ -6,6 +6,113 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## [0.7.0] - 2025-11-05
+
+### Milestone 7: AI-Powered Trading Strategy ✅ COMPLETED
+
+This release transforms the bot from signal-based trading to AI-powered decision making using Large Language Models (LLMs).
+
+#### Added
+
+**AI Strategy System (`strategies/ai_strategy.py`)**
+- **LLM Integration**: Uses OpenRouter API with DeepSeek Chat v3.1 model for trading decisions
+- **Comprehensive Analysis**: AI analyzes market data, technical indicators, positions, and risk metrics
+- **Explainable Decisions**: Every decision includes detailed reasoning and key factors
+- **Confidence Filtering**: Only trades when AI confidence exceeds threshold (default: 70%)
+- **Decision History**: Logs all AI decisions with reasoning for review and analysis
+- **Statistics Tracking**: Monitors AI performance, confidence levels, and API usage
+
+**LLM Client (`strategies/llm_client.py`)**
+- **OpenRouter API Integration**: Communicates with OpenRouter API for LLM access
+- **Retry Logic**: Exponential backoff retry mechanism for API failures
+- **Error Handling**: Robust error handling for timeouts, rate limits, and API errors
+- **Response Parsing**: Parses JSON responses with support for markdown code blocks
+- **Token Tracking**: Monitors API usage and token consumption
+- **Configurable Parameters**: Adjustable model, temperature, timeout, and retry settings
+
+**Market Analyzer (`strategies/market_analyzer.py`)**
+- **Multi-Timeframe Analysis**: Collects price data from M1, M5, M15, and H1 timeframes
+- **Technical Indicators**: Calculates RSI, MACD, Moving Averages, ATR, Bollinger Bands
+- **Price Action Analysis**: Analyzes trends, momentum, and volatility across timeframes
+- **Position Tracking**: Includes current positions, P/L, and pip calculations
+- **Account Status**: Provides balance, equity, margin, and daily P/L information
+- **Risk Context**: Includes risk constraints, limits, and current exposure
+
+**Configuration**
+- **AI Strategy Config**: Added AIStrategy configuration to `config/settings.json`
+- **API Key Management**: Secure API key configuration
+- **Model Selection**: Configurable LLM model (default: deepseek/deepseek-chat-v3.1:free)
+- **Confidence Threshold**: Adjustable minimum confidence for trading (default: 0.7)
+- **Temperature Control**: LLM creativity parameter (default: 0.7)
+- **Enabled by Default**: AI strategy enabled, traditional strategies disabled
+
+**Testing**
+- **16 New Tests**: Comprehensive test coverage for AI components
+- **LLM Client Tests**: API calls, retry logic, response parsing, error handling
+- **Market Analyzer Tests**: Indicator calculations, data collection, context building
+- **AI Strategy Tests**: Signal generation, confidence filtering, statistics
+- **100% Pass Rate**: All tests passing successfully
+
+**Logging**
+- **AI Decision Log**: All AI decisions saved to `logs/ai_decisions.jsonl`
+- **Detailed Reasoning**: Each decision includes full reasoning and key factors
+- **Confidence Scores**: Tracks confidence levels for all decisions
+- **Model Information**: Logs which model made each decision
+
+#### Changed
+
+- **Strategy System**: AI strategy now primary decision maker (traditional strategies available as fallback)
+- **Main Configuration**: Updated `config/settings.json` to use AIStrategy by default
+- **Strategy Manager**: Enhanced to support AI strategy initialization with risk manager
+- **Imports**: Added AIStrategy to main.py imports and strategy package exports
+
+#### Technical Details
+
+**AI Decision Workflow:**
+1. **Data Collection**: Market Analyzer gathers comprehensive market context
+2. **Prompt Building**: LLM Client formats data into structured prompt
+3. **AI Analysis**: LLM analyzes data and provides decision with reasoning
+4. **Confidence Check**: Decision filtered based on confidence threshold
+5. **Execution**: High-confidence decisions passed to trading system
+6. **Logging**: All decisions and reasoning logged for review
+
+**Market Context Provided to AI:**
+- Current price (bid/ask/spread)
+- Technical indicators (RSI, MACD, MA, ATR, Bollinger Bands)
+- Multi-timeframe price action and trends
+- Current positions and P/L
+- Account balance and equity
+- Risk constraints and limits
+- Daily P/L status
+
+**AI Response Format:**
+```json
+{
+  "decision": "BUY|SELL|NONE",
+  "reasoning": "Detailed explanation of analysis",
+  "confidence": 0.0-1.0,
+  "key_factors": ["factor1", "factor2", "factor3"]
+}
+```
+
+#### Benefits
+
+- **Holistic Analysis**: AI considers all factors simultaneously, not just individual indicators
+- **Adaptive**: AI can adapt to changing market conditions without manual strategy tuning
+- **Explainable**: Every decision includes clear reasoning for transparency
+- **Conservative**: Confidence filtering prevents low-quality trades
+- **Comprehensive**: Analyzes multiple timeframes and indicators together
+- **Risk-Aware**: AI considers current positions, exposure, and risk limits
+
+#### Migration Notes
+
+- **Existing Bots**: Traditional strategies still available, can be re-enabled in config
+- **API Key Required**: AIStrategy requires OpenRouter API key in configuration
+- **Free Tier**: Using free DeepSeek model, no API costs
+- **Backward Compatible**: Can switch back to traditional strategies by updating config
+
+---
+
 ## [0.6.0] - 2025-10-29
 
 ### Milestone 6: Logging & Analytics ✅ COMPLETED

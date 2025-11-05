@@ -8,10 +8,23 @@
 
   "strategy_config": {
     "combination_method": "majority",
-    "enabled_strategies": ["SimpleStrategy", "MAStrategy", "RSIStrategy"],
+    "enabled_strategies": ["AIStrategy"],
+
+    "AIStrategy": {
+      "enabled": true,
+      "weight": 1.0,
+      "params": {
+        "api_key": "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",
+        "model": "deepseek/deepseek-chat-v3.1:free",
+        "confidence_threshold": 0.7,
+        "temperature": 0.7,
+        "timeout": 30,
+        "max_retries": 3
+      }
+    },
 
     "SimpleStrategy": {
-      "enabled": true,
+      "enabled": false,
       "weight": 1.0,
       "params": {
         "timeframe": "M1",
@@ -20,7 +33,7 @@
     },
 
     "MAStrategy": {
-      "enabled": true,
+      "enabled": false,
       "weight": 1.5,
       "params": {
         "timeframe": "M5",
@@ -31,7 +44,7 @@
     },
 
     "RSIStrategy": {
-      "enabled": true,
+      "enabled": false,
       "weight": 1.2,
       "params": {
         "timeframe": "M5",
@@ -42,7 +55,7 @@
     },
 
     "MACDStrategy": {
-      "enabled": true,
+      "enabled": false,
       "weight": 1.0,
       "params": {
         "timeframe": "M15",
