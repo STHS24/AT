@@ -11,6 +11,11 @@ __pycache__/
 *$py.class
 *.so
 
+# Development tools
+environment.yml
+*conda*
+.augment/*
+
 # Distribution / packaging
 .Python
 build/
