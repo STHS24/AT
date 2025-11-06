@@ -113,6 +113,9 @@ The AI strategy is configured in `config/settings.json` under `strategy_config.A
 | `temperature` | float | 0.7 | LLM creativity parameter (0.0=deterministic, 1.0=creative) |
 | `timeout` | integer | 30 | API request timeout in seconds |
 | `max_retries` | integer | 3 | Maximum retry attempts for failed API calls |
+| `enable_position_management` | boolean | true | Enable AI-powered position management |
+| `min_hold_time_minutes` | integer | 5 | Minimum time to hold position before AI can close it |
+| `position_check_interval` | integer | 1 | How often to analyze positions (every N iterations) |
 
 ### Getting an API Key
 
@@ -152,6 +155,75 @@ The AI returns structured decisions:
   ]
 }
 ```
+
+### AI Position Management
+
+The AI doesn't just decide when to enter trades - it also actively manages open positions!
+
+#### How It Works
+
+1. **Every Trading Iteration**: Before generating new signals, the AI analyzes all open positions
+2. **Comprehensive Analysis**: AI evaluates:
+   - Current market conditions vs entry conditions
+   - Unrealized P/L and position duration
+   - Technical indicator changes since entry
+   - Risk/reward ratio and profit targets
+   - Market volatility and momentum shifts
+
+3. **Three Possible Actions**:
+   - **HOLD**: Keep position open (market conditions still favorable)
+   - **CLOSE**: Close entire position (conditions changed, protect profit/loss)
+   - **CLOSE_PARTIAL**: Close part of position (lock in some profit, let rest run)
+
+#### Position Management Response Format
+
+```json
+{
+  "action": "CLOSE_PARTIAL",
+  "reasoning": "Position is profitable at +45 pips. RSI showing overbought at 72 and MACD momentum weakening. Close 50% to lock in profit while keeping upside potential if trend continues.",
+  "confidence": 0.82,
+  "partial_percentage": 0.5
+}
+```
+
+#### Configuration
+
+**Enable/Disable Position Management**:
+```json
+"enable_position_management": true
+```
+
+**Minimum Hold Time** (prevents premature exits):
+```json
+"min_hold_time_minutes": 5
+```
+
+**Position Check Interval**:
+```json
+"position_check_interval": 1  // Check every iteration
+```
+
+#### Example Scenarios
+
+**Scenario 1: Profitable Position, Trend Continues**
+- Action: HOLD
+- Reasoning: "Position profitable at +30 pips. Trend remains strong with MACD bullish and price above MA20. Hold for further gains."
+
+**Scenario 2: Trend Reversal Detected**
+- Action: CLOSE
+- Reasoning: "Trend reversed. RSI crossed below 50, MACD bearish crossover, price broke below MA50. Close to protect profit."
+
+**Scenario 3: Partial Profit Taking**
+- Action: CLOSE_PARTIAL (50%)
+- Reasoning: "Strong profit at +60 pips but momentum slowing. Close 50% to lock in gains, let remaining 50% run with trailing stop."
+
+#### Benefits
+
+- **Profit Protection**: AI exits when conditions deteriorate
+- **Trend Following**: Holds winners when trend continues
+- **Risk Management**: Reduces exposure when uncertainty increases
+- **Partial Closes**: Lock in profits while keeping upside potential
+- **Explainable**: Every decision includes detailed reasoning
 
 ### Confidence Threshold
 
@@ -227,9 +299,52 @@ The configuration file contains three main sections:
 | `symbol` | string | "EURUSD" | Trading symbol (e.g., EURUSD, GBPUSD, USDJPY) |
 | `volume` | float | 0.1 | Trade volume in lots (used if dynamic sizing disabled) |
 | `deviation` | integer | 50 | Maximum price deviation in points |
-| `trade_interval_seconds` | integer | 60 | Time between trading checks (seconds) |
+| `analysis_interval_seconds` | integer | 5 | How often AI analyzes the market (seconds) |
+| `trade_interval_seconds` | integer | 60 | Minimum cooldown between trades (seconds) |
+| `enable_urgent_bypass` | boolean | true | Allow urgent trades to bypass cooldown |
 | `max_concurrent_trades` | integer | 10 | Maximum number of open positions |
 | `enable_continuous_trading` | boolean | true | Enable continuous trading mode |
+
+### Timing Architecture
+
+The bot uses a **dual-interval system** for optimal performance:
+
+#### Analysis Interval (Default: 5 seconds)
+- **Purpose**: How often the AI analyzes the market
+- **Frequency**: Every 5 seconds (12 times per minute)
+- **What happens**:
+  - AI collects market data
+  - Analyzes technical indicators
+  - Checks open positions
+  - Generates trading signals
+  - Detects urgent opportunities
+
+#### Trade Interval (Default: 60 seconds)
+- **Purpose**: Minimum cooldown between trade executions
+- **Frequency**: Enforced gap between trades
+- **What happens**:
+  - Prevents overtrading
+  - Enforces risk management
+  - Can be bypassed for urgent trades
+
+#### Urgent Bypass
+When `enable_urgent_bypass: true`, the AI can bypass the trade cooldown for time-sensitive opportunities:
+- **Strong breakouts** requiring immediate entry
+- **Critical support/resistance tests**
+- **Extreme volatility events**
+- **Rapid trend reversals**
+
+**Example Timeline:**
+```
+0:00 - AI analyzes market → No signal
+0:05 - AI analyzes market → No signal
+0:10 - AI analyzes market → BUY signal (confidence 0.85) → Trade executed
+0:15 - AI analyzes market → SELL signal (confidence 0.90) → Blocked (cooldown)
+0:20 - AI analyzes market → SELL signal (confidence 0.95, URGENT) → Trade executed (bypass)
+0:25 - AI analyzes market → Position management
+...
+1:10 - AI analyzes market → BUY signal → Trade executed (cooldown expired)
+```
 
 ### Risk Management Parameters
 

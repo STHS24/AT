@@ -340,20 +340,182 @@ class TestAIStrategy:
     def test_get_statistics(self):
         """Test getting strategy statistics."""
         from strategies.ai_strategy import AIStrategy
-        
+
         strategy = AIStrategy({"api_key": "test_key"})
-        
+
         # Add some mock decisions
         strategy.decision_history = [
             {"decision": "BUY", "confidence": 0.8},
             {"decision": "SELL", "confidence": 0.75},
             {"decision": "NONE", "confidence": 0.5}
         ]
-        
+
         stats = strategy.get_statistics()
-        
+
         assert stats["total_decisions"] == 3
         assert stats["buy_signals"] == 1
         assert stats["sell_signals"] == 1
         assert stats["hold_signals"] == 1
+
+
+class TestPositionManagement:
+    """Tests for Position Management features."""
+
+    @patch('strategies.ai_strategy.MarketAnalyzer')
+    @patch('strategies.ai_strategy.LLMClient')
+    def test_analyze_position_hold(self, mock_llm_class, mock_analyzer_class):
+        """Test position analysis with HOLD decision."""
+        from strategies.ai_strategy import AIStrategy
+
+        # Mock LLM client
+        mock_llm = Mock()
+        mock_llm.get_position_management_decision.return_value = {
+            "action": "HOLD",
+            "reasoning": "Position is profitable and trend continues",
+            "confidence": 0.8,
+            "partial_percentage": 0.5
+        }
+        mock_llm_class.return_value = mock_llm
+
+        # Mock market analyzer
+        mock_analyzer = Mock()
+        mock_analyzer.get_position_analysis_context.return_value = {"position": {}}
+        mock_analyzer_class.return_value = mock_analyzer
+
+        # Mock position
+        mock_position = Mock()
+        mock_position.ticket = 12345
+        mock_position.profit = 50.0
+
+        strategy = AIStrategy({"api_key": "test_key", "confidence_threshold": 0.7})
+        decision = strategy.analyze_position(mock_position, "EURUSD")
+
+        assert decision["action"] == "HOLD"
+        assert decision["confidence"] == 0.8
+
+    @patch('strategies.ai_strategy.MarketAnalyzer')
+    @patch('strategies.ai_strategy.LLMClient')
+    def test_analyze_position_close(self, mock_llm_class, mock_analyzer_class):
+        """Test position analysis with CLOSE decision."""
+        from strategies.ai_strategy import AIStrategy
+
+        # Mock LLM client with high confidence close
+        mock_llm = Mock()
+        mock_llm.get_position_management_decision.return_value = {
+            "action": "CLOSE",
+            "reasoning": "Trend reversed, close to protect profit",
+            "confidence": 0.85,
+            "partial_percentage": 0.5
+        }
+        mock_llm_class.return_value = mock_llm
+
+        # Mock market analyzer
+        mock_analyzer = Mock()
+        mock_analyzer.get_position_analysis_context.return_value = {"position": {}}
+        mock_analyzer_class.return_value = mock_analyzer
+
+        # Mock position
+        mock_position = Mock()
+        mock_position.ticket = 12345
+
+        strategy = AIStrategy({"api_key": "test_key", "confidence_threshold": 0.7})
+        decision = strategy.analyze_position(mock_position, "EURUSD")
+
+        assert decision["action"] == "CLOSE"
+        assert decision["confidence"] == 0.85
+
+    @patch('strategies.ai_strategy.MarketAnalyzer')
+    @patch('strategies.ai_strategy.LLMClient')
+    def test_analyze_position_close_partial(self, mock_llm_class, mock_analyzer_class):
+        """Test position analysis with CLOSE_PARTIAL decision."""
+        from strategies.ai_strategy import AIStrategy
+
+        # Mock LLM client
+        mock_llm = Mock()
+        mock_llm.get_position_management_decision.return_value = {
+            "action": "CLOSE_PARTIAL",
+            "reasoning": "Lock in 50% profit, let rest run",
+            "confidence": 0.75,
+            "partial_percentage": 0.5
+        }
+        mock_llm_class.return_value = mock_llm
+
+        # Mock market analyzer
+        mock_analyzer = Mock()
+        mock_analyzer.get_position_analysis_context.return_value = {"position": {}}
+        mock_analyzer_class.return_value = mock_analyzer
+
+        # Mock position
+        mock_position = Mock()
+        mock_position.ticket = 12345
+
+        strategy = AIStrategy({"api_key": "test_key", "confidence_threshold": 0.7})
+        decision = strategy.analyze_position(mock_position, "EURUSD")
+
+        assert decision["action"] == "CLOSE_PARTIAL"
+        assert decision["partial_percentage"] == 0.5
+
+    @patch('strategies.ai_strategy.MarketAnalyzer')
+    @patch('strategies.ai_strategy.LLMClient')
+    def test_analyze_position_low_confidence_filtered(self, mock_llm_class, mock_analyzer_class):
+        """Test that low confidence close decisions are filtered to HOLD."""
+        from strategies.ai_strategy import AIStrategy
+
+        # Mock LLM client with low confidence
+        mock_llm = Mock()
+        mock_llm.get_position_management_decision.return_value = {
+            "action": "CLOSE",
+            "reasoning": "Maybe close?",
+            "confidence": 0.5,
+            "partial_percentage": 0.5
+        }
+        mock_llm_class.return_value = mock_llm
+
+        # Mock market analyzer
+        mock_analyzer = Mock()
+        mock_analyzer.get_position_analysis_context.return_value = {"position": {}}
+        mock_analyzer_class.return_value = mock_analyzer
+
+        # Mock position
+        mock_position = Mock()
+        mock_position.ticket = 12345
+
+        strategy = AIStrategy({"api_key": "test_key", "confidence_threshold": 0.7})
+        decision = strategy.analyze_position(mock_position, "EURUSD")
+
+        # Should be filtered to HOLD due to low confidence
+        assert decision["action"] == "HOLD"
+
+    @patch('strategies.market_analyzer.mt5')
+    def test_format_position_details(self, mock_mt5):
+        """Test formatting position details for AI analysis."""
+        from strategies.market_analyzer import MarketAnalyzer
+        from datetime import datetime, timedelta
+
+        # Mock symbol info
+        mock_symbol_info = Mock()
+        mock_symbol_info.point = 0.00001
+        mock_mt5.symbol_info.return_value = mock_symbol_info
+        mock_mt5.ORDER_TYPE_BUY = 0
+
+        # Mock position
+        mock_position = Mock()
+        mock_position.ticket = 12345
+        mock_position.type = 0  # BUY
+        mock_position.volume = 0.1
+        mock_position.price_open = 1.16000
+        mock_position.price_current = 1.16050
+        mock_position.sl = 1.15900
+        mock_position.tp = 1.16200
+        mock_position.profit = 5.0
+        mock_position.time = (datetime.now() - timedelta(minutes=30)).timestamp()
+
+        analyzer = MarketAnalyzer()
+        details = analyzer._format_position_details(mock_position, "EURUSD")
+
+        assert details["ticket"] == 12345
+        assert details["type"] == "BUY"
+        assert details["volume"] == 0.1
+        assert details["profit"] == 5.0
+        assert "duration" in details
 

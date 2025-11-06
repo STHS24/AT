@@ -6,6 +6,163 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## [0.9.0] - 2025-11-05
+
+### Milestone 9: Separated Analysis & Execution Timing + Urgent Bypass ✅ COMPLETED
+
+This release separates market analysis from trade execution timing, allowing the AI to constantly monitor the market while respecting trade cooldowns. It also adds an urgent bypass mechanism for time-sensitive opportunities.
+
+#### Added
+
+**Separated Timing Architecture (`main.py`, `config/settings.json`)**
+- **`analysis_interval_seconds`**: How often AI analyzes the market (default: 5 seconds)
+- **`trade_interval_seconds`**: Minimum cooldown between trade executions (default: 60 seconds)
+- **Constant Market Monitoring**: AI now analyzes market every 5 seconds instead of every 60 seconds
+- **Position Management Always Active**: Position analysis runs every iteration regardless of trade cooldown
+- **Independent Intervals**: Analysis and execution are now completely separate
+
+**Urgent Bypass System (`strategies/ai_strategy.py`, `strategies/llm_client.py`)**
+- **Urgent Flag**: AI can mark decisions as "urgent" for time-sensitive opportunities
+- **Cooldown Bypass**: Urgent trades bypass the trade_interval cooldown
+- **`enable_urgent_bypass`**: Configuration to enable/disable urgent bypass (default: true)
+- **Urgent Detection**: AI marks opportunities as urgent for:
+  - Strong breakouts
+  - Critical support/resistance tests
+  - Extreme volatility events
+  - Time-sensitive market conditions
+
+**Enhanced Rate Limiting (`strategies/llm_client.py`)**
+- **Retry-After Header Support**: Respects API's Retry-After header for rate limits
+- **Capped Exponential Backoff**: Maximum wait time of 30 seconds
+- **Better Error Messages**: Clearer rate limit warnings with wait times
+
+**Last Trade Time Tracking (`main.py`)**
+- **Global Trade Cooldown**: Tracks last trade execution time
+- **Cooldown Display**: Shows remaining cooldown time in logs
+- **Force Execution Parameter**: `trading_iteration()` accepts `force_execution` parameter
+
+#### Changed
+
+**Trading Loop (`main.py`)**
+- **Analysis Every 5 Seconds**: AI analyzes market much more frequently
+- **Trade Cooldown Enforcement**: Trades only execute after cooldown expires (unless urgent)
+- **Urgent Check**: Checks if AI marked last decision as urgent before each iteration
+- **Better Logging**: Shows analysis interval vs trade cooldown in startup message
+
+**AI Strategy (`strategies/ai_strategy.py`)**
+- **Urgency Tracking**: Stores `last_decision_urgent` flag
+- **`is_last_decision_urgent()` Method**: Allows checking if last decision was urgent
+- **Urgent Logging**: Logs urgency flag with all decisions
+- **Urgent Display**: Shows 🚨 URGENT flag in console output
+
+**LLM Client (`strategies/llm_client.py`)**
+- **Urgent Field in Prompt**: System prompt now requests "urgent" field in JSON response
+- **Urgent Parsing**: Extracts and validates "urgent" boolean from LLM responses
+- **Urgency Guidelines**: Provides clear guidelines for when to mark decisions as urgent
+
+#### Configuration
+
+**New Parameters in `config/settings.json`:**
+```json
+{
+  "analysis_interval_seconds": 5,
+  "trade_interval_seconds": 60,
+  "enable_urgent_bypass": true
+}
+```
+
+#### Technical Details
+
+- Analysis runs every 5 seconds (12x per minute)
+- Trades execute with 60-second cooldown (unless urgent)
+- Position management runs every analysis iteration
+- Urgent bypass requires both `enable_urgent_bypass: true` and AI marking decision as urgent
+- Rate limiting now respects Retry-After headers
+- Last trade time tracked globally to enforce cooldown across all strategies
+
+#### Benefits
+
+1. **Faster Market Response**: AI sees market changes within 5 seconds instead of 60
+2. **Better Opportunity Detection**: More frequent analysis catches short-lived opportunities
+3. **Risk Management**: Trade cooldown prevents overtrading
+4. **Urgent Action**: Can act immediately on critical opportunities
+5. **Position Monitoring**: Positions analyzed 12x more frequently
+6. **Reduced Slippage**: Faster detection of exit signals
+
+---
+
+## [0.8.0] - 2025-11-05
+
+### Milestone 8: AI Position Management ✅ COMPLETED
+
+This release enhances the AI trading bot with intelligent position management capabilities. The AI now actively manages open positions, deciding when to hold, close, or partially close positions based on market analysis.
+
+#### Added
+
+**AI Position Management (`strategies/ai_strategy.py`)**
+- **Position Analysis**: AI analyzes open positions and recommends HOLD, CLOSE, or CLOSE_PARTIAL actions
+- **Market Condition Comparison**: Compares current market conditions vs entry conditions
+- **Profit Protection**: Evaluates unrealized P/L and position duration for optimal exits
+- **Confidence-Based Decisions**: Respects confidence thresholds for closing decisions (default: 70%)
+- **Decision Logging**: All position management decisions logged with reasoning
+
+**Partial Position Closing (`main.py`)**
+- **Partial Close Support**: Enhanced `close_position()` to support closing a percentage of position
+- **Profit Locking**: Lock in partial profits while keeping upside potential
+- **Risk Reduction**: Reduce exposure while maintaining market participation
+- **AI-Recommended Percentages**: AI suggests optimal percentage to close (e.g., 50%)
+
+**Enhanced LLM Client (`strategies/llm_client.py`)**
+- **Position Management API**: New `get_position_management_decision()` method
+- **Position-Specific Prompts**: Optimized system prompt for exit decision analysis
+- **Response Parsing**: Dedicated parser for position management responses (action, reasoning, confidence, partial_percentage)
+- **Robust JSON Extraction**: Handles extra text before/after JSON in LLM responses
+
+**Enhanced Market Analyzer (`strategies/market_analyzer.py`)**
+- **Position Context Collection**: New `get_position_analysis_context()` method
+- **Position Detail Formatting**: New `_format_position_details()` method
+- **Duration Calculation**: Calculates position hold time in minutes and formatted string
+- **Pip Calculation**: Calculates current profit/loss in pips
+- **SL/TP Distance**: Calculates distance to stop-loss and take-profit levels
+
+**Configuration Options (`config/settings.json`)**
+- **`enable_position_management`**: Toggle AI position management (default: true)
+- **`min_hold_time_minutes`**: Minimum hold time before AI can close (default: 5 minutes)
+- **`position_check_interval`**: How often to analyze positions (default: every iteration)
+
+**Comprehensive Testing (`tests/test_ai_strategy.py`)**
+- **5 New Tests**: Position management test suite
+  - `test_analyze_position_hold`: Tests HOLD decision
+  - `test_analyze_position_close`: Tests CLOSE decision
+  - `test_analyze_position_close_partial`: Tests CLOSE_PARTIAL decision
+  - `test_analyze_position_low_confidence_filtered`: Tests confidence filtering
+  - `test_format_position_details`: Tests position data formatting
+- **21 Total Tests**: All tests passing
+
+#### Changed
+
+**Trading Loop (`main.py`)**
+- **Position Management First**: Analyzes and manages positions before generating new signals
+- **Minimum Hold Time**: Respects minimum hold time to prevent premature exits
+- **AI Reasoning in Comments**: Close orders include AI reasoning for audit trail
+
+**Close Position Function (`main.py`)**
+- **Volume Parameter**: Added optional `volume` parameter for partial closes
+- **Reason Parameter**: Added `reason` parameter for logging close rationale
+- **Partial Close Support**: Calculates proportional profit/commission/swap for partial closes
+- **Enhanced Logging**: Logs partial vs full closes with reasoning
+
+#### Technical Details
+
+- Position management decisions respect confidence thresholds (default: 0.7)
+- Low confidence close decisions automatically filtered to HOLD
+- Minimum hold time prevents analysis of newly opened positions
+- All position decisions logged to `logs/ai_decisions.jsonl` with type "position_management"
+- Partial closes calculate proportional P/L based on volume closed
+- AI reasoning included in MT5 order comments for full audit trail
+
+---
+
 ## [0.7.0] - 2025-11-05
 
 ### Milestone 7: AI-Powered Trading Strategy ✅ COMPLETED

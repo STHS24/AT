@@ -2,7 +2,9 @@
   "symbol": "EURUSD",
   "volume": 0.1,
   "deviation": 50,
+  "analysis_interval_seconds": 5,
   "trade_interval_seconds": 60,
+  "enable_urgent_bypass": true,
   "max_concurrent_trades": 10,
   "enable_continuous_trading": true,
 
@@ -19,7 +21,10 @@
         "confidence_threshold": 0.7,
         "temperature": 0.7,
         "timeout": 30,
-        "max_retries": 3
+        "max_retries": 3,
+        "enable_position_management": true,
+        "min_hold_time_minutes": 5,
+        "position_check_interval": 1
       }
     },
 

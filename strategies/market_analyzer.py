@@ -54,7 +54,79 @@ class MarketAnalyzer:
         }
         
         return context
-    
+
+    def get_position_analysis_context(self, position, symbol: str, config: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Get comprehensive context for analyzing an open position.
+
+        Args:
+            position: MT5 position object
+            symbol: Trading symbol
+            config: Configuration dictionary
+
+        Returns:
+            Dictionary containing position details and market context
+        """
+        # Get position details
+        position_data = self._format_position_details(position, symbol)
+
+        # Get current market context
+        context = {
+            "position": position_data,
+            "symbol": symbol,
+            "timestamp": datetime.now().isoformat(),
+            "current_price": self._get_current_price(symbol),
+            "indicators": self._get_technical_indicators(symbol),
+            "price_action": self._get_price_action(symbol),
+            "account": self._get_account_status(),
+            "risk_constraints": self._get_risk_constraints(config)
+        }
+
+        return context
+
+    def _format_position_details(self, position, symbol: str) -> Dict[str, Any]:
+        """
+        Format position details for AI analysis.
+
+        Args:
+            position: MT5 position object
+            symbol: Trading symbol
+
+        Returns:
+            Dictionary with position details
+        """
+        # Get symbol info for pip calculation
+        symbol_info = mt5.symbol_info(symbol)
+        point = symbol_info.point if symbol_info else 0.00001
+
+        # Calculate pips
+        if position.type == mt5.ORDER_TYPE_BUY:
+            pips = (position.price_current - position.price_open) / (point * 10)
+            pos_type = "BUY"
+        else:
+            pips = (position.price_open - position.price_current) / (point * 10)
+            pos_type = "SELL"
+
+        # Calculate duration
+        open_time = datetime.fromtimestamp(position.time)
+        duration = datetime.now() - open_time
+        duration_str = f"{duration.days}d {duration.seconds // 3600}h {(duration.seconds % 3600) // 60}m"
+
+        return {
+            "ticket": position.ticket,
+            "type": pos_type,
+            "volume": position.volume,
+            "price_open": round(position.price_open, 5),
+            "price_current": round(position.price_current, 5),
+            "sl": round(position.sl, 5) if position.sl > 0 else None,
+            "tp": round(position.tp, 5) if position.tp > 0 else None,
+            "profit": round(position.profit, 2),
+            "pips": round(pips, 1),
+            "duration": duration_str,
+            "duration_minutes": int(duration.total_seconds() / 60),
+            "open_time": open_time.isoformat()
+        }
+
     def _get_current_price(self, symbol: str) -> Dict[str, Any]:
         """Get current price information."""
         tick = mt5.symbol_info_tick(symbol)

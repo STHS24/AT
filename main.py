@@ -57,9 +57,14 @@ except FileNotFoundError:
 SYMBOL = config.get("symbol", "EURUSD")
 VOLUME = float(config.get("volume", 0.1))
 DEVIATION = int(config.get("deviation", 50))
-TRADE_INTERVAL = int(config.get("trade_interval_seconds", 300))  # Default 5 minutes
+ANALYSIS_INTERVAL = int(config.get("analysis_interval_seconds", 5))  # How often to analyze market
+TRADE_INTERVAL = int(config.get("trade_interval_seconds", 60))  # Cooldown between trades
+ENABLE_URGENT_BYPASS = config.get("enable_urgent_bypass", True)  # Allow urgent trades
 MAX_CONCURRENT_TRADES = int(config.get("max_concurrent_trades", 3))
 ENABLE_CONTINUOUS = config.get("enable_continuous_trading", False)
+
+# Track last trade time for cooldown
+last_trade_time = 0
 
 # Ensure logs folder exists
 os.makedirs("logs", exist_ok=True)
@@ -371,12 +376,14 @@ def execute_trade(symbol, action):
         return False
 
 
-def close_position(position):
+def close_position(position, volume=None, reason="Manual close"):
     """
-    Close an open position.
+    Close an open position (fully or partially).
 
     Args:
         position: MT5 position object
+        volume: Volume to close (None = close all)
+        reason: Reason for closing
 
     Returns:
         bool: True if closed successfully, False otherwise
@@ -385,6 +392,10 @@ def close_position(position):
     if tick is None:
         print(f"❌ Could not get tick data for {position.symbol}")
         return False
+
+    # Determine close volume
+    close_volume = volume if volume is not None else position.volume
+    is_partial = close_volume < position.volume
 
     # Determine close price and order type
     if position.type == mt5.ORDER_TYPE_BUY:
@@ -399,13 +410,13 @@ def close_position(position):
     request = {
         "action": mt5.TRADE_ACTION_DEAL,
         "symbol": position.symbol,
-        "volume": position.volume,
+        "volume": close_volume,
         "type": order_type,
         "position": position.ticket,
         "price": close_price,
         "deviation": DEVIATION,
         "magic": 234000,
-        "comment": "python script close",
+        "comment": f"AI: {reason}" if "AI" in reason else "python script close",
         "type_time": mt5.ORDER_TIME_GTC,
         "type_filling": mt5.ORDER_FILLING_FOK,
     }
@@ -413,11 +424,16 @@ def close_position(position):
     result = mt5.order_send(request)
 
     if result.retcode == mt5.TRADE_RETCODE_DONE:
-        profit = position.profit
-        commission = position.commission if hasattr(position, 'commission') else 0
-        swap = position.swap if hasattr(position, 'swap') else 0
+        profit = position.profit * (close_volume / position.volume)
+        commission = (position.commission if hasattr(position, 'commission') else 0) * (close_volume / position.volume)
+        swap = (position.swap if hasattr(position, 'swap') else 0) * (close_volume / position.volume)
 
-        print(f"✅ Position #{position.ticket} closed | Profit: {profit:.2f}")
+        if is_partial:
+            print(f"✅ Position #{position.ticket} partially closed ({close_volume}/{position.volume} lots) | Profit: {profit:.2f}")
+            print(f"   Reason: {reason}")
+        else:
+            print(f"✅ Position #{position.ticket} closed | Profit: {profit:.2f}")
+            print(f"   Reason: {reason}")
 
         # Log trade close
         TRADE_LOGGER.log_trade_close(
@@ -437,13 +453,92 @@ def close_position(position):
         return False
 
 
-def trading_iteration(symbol):
+def manage_open_positions_with_ai(symbol):
+    """
+    Use AI to analyze and manage open positions.
+
+    Args:
+        symbol: Trading symbol
+    """
+    # Get AI strategy from manager
+    ai_strategy = None
+    for strategy in STRATEGY_MANAGER.strategies:
+        if isinstance(strategy, AIStrategy) and strategy.enabled:
+            ai_strategy = strategy
+            break
+
+    if ai_strategy is None:
+        return  # No AI strategy enabled
+
+    # Check if position management is enabled
+    if not ai_strategy.params.get("enable_position_management", True):
+        return  # Position management disabled
+
+    # Get open positions for this symbol
+    positions = get_open_positions(symbol)
+
+    if not positions:
+        return  # No positions to manage
+
+    # Get minimum hold time
+    min_hold_minutes = ai_strategy.params.get("min_hold_time_minutes", 5)
+
+    print(f"\n{'='*60}")
+    print(f"🔍 AI Position Management - Analyzing {len(positions)} position(s)")
+    print(f"{'='*60}")
+
+    for position in positions:
+        try:
+            # Check minimum hold time
+            from datetime import datetime, timedelta
+            open_time = datetime.fromtimestamp(position.time)
+            hold_duration = (datetime.now() - open_time).total_seconds() / 60
+
+            if hold_duration < min_hold_minutes:
+                print(f"\n⏱️  Position #{position.ticket} held for {hold_duration:.1f}min (min: {min_hold_minutes}min) - Skipping analysis")
+                continue
+
+            # Get AI recommendation for this position
+            decision = ai_strategy.analyze_position(position, symbol)
+
+            action = decision.get("action", "HOLD")
+            reasoning = decision.get("reasoning", "")
+            confidence = decision.get("confidence", 0.0)
+
+            if action == "CLOSE":
+                print(f"\n🚨 AI recommends CLOSING position #{position.ticket}")
+                print(f"   Confidence: {confidence:.2f}")
+                print(f"   Reasoning: {reasoning[:150]}...")
+                close_position(position, reason=f"AI Close: {reasoning[:50]}")
+
+            elif action == "CLOSE_PARTIAL":
+                partial_pct = decision.get("partial_percentage", 0.5)
+                close_volume = round(position.volume * partial_pct, 2)
+
+                print(f"\n⚠️  AI recommends PARTIAL CLOSE of position #{position.ticket}")
+                print(f"   Closing: {partial_pct*100:.0f}% ({close_volume} lots)")
+                print(f"   Confidence: {confidence:.2f}")
+                print(f"   Reasoning: {reasoning[:150]}...")
+                close_position(position, volume=close_volume, reason=f"AI Partial: {reasoning[:50]}")
+
+            else:  # HOLD
+                print(f"\n📊 AI recommends HOLDING position #{position.ticket}")
+                print(f"   Current P/L: ${position.profit:.2f}")
+
+        except Exception as e:
+            print(f"❌ Error analyzing position #{position.ticket}: {e}")
+
+
+def trading_iteration(symbol, force_execution=False):
     """
     Perform one trading iteration: check signal, validate, and execute if appropriate.
 
     Args:
         symbol: Trading symbol
+        force_execution: If True, bypass trade cooldown (for urgent trades)
     """
+    global last_trade_time
+
     print(f"\n{'='*60}")
     print(f"🔄 Trading iteration at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     print(f"{'='*60}")
@@ -455,6 +550,19 @@ def trading_iteration(symbol):
 
     if not can_trade:
         print(f"🚫 Trading halted: {reason}")
+        return
+
+    # First, manage existing positions with AI (if enabled)
+    # Position management can always run (not subject to trade cooldown)
+    manage_open_positions_with_ai(symbol)
+
+    # Check trade cooldown
+    current_time = time.time()
+    time_since_last_trade = current_time - last_trade_time
+    cooldown_remaining = max(0, TRADE_INTERVAL - time_since_last_trade)
+
+    if cooldown_remaining > 0 and not force_execution:
+        print(f"⏳ Trade cooldown: {cooldown_remaining:.0f}s remaining (use urgent bypass if needed)")
         return
 
     # Get combined strategy decision
@@ -492,7 +600,13 @@ def trading_iteration(symbol):
         return
 
     # Execute the trade
-    execute_trade(symbol, action)
+    success = execute_trade(symbol, action)
+
+    # Update last trade time if trade was executed
+    if success:
+        last_trade_time = time.time()
+        if force_execution:
+            print("🚨 Urgent trade executed (bypassed cooldown)")
 
 
 def run_single_trade():
@@ -511,7 +625,7 @@ def run_single_trade():
 
 
 def run_continuous_trading():
-    """Run continuous trading loop with scheduler."""
+    """Run continuous trading loop with separate analysis and execution intervals."""
     global running
 
     if not initialize_mt5():
@@ -522,7 +636,9 @@ def run_continuous_trading():
         sys.exit(1)
 
     print(f"\n🔁 Starting continuous trading mode...")
-    print(f"   Trade interval: {TRADE_INTERVAL} seconds")
+    print(f"   Analysis interval: {ANALYSIS_INTERVAL} seconds (constant market monitoring)")
+    print(f"   Trade cooldown: {TRADE_INTERVAL} seconds (minimum time between trades)")
+    print(f"   Urgent bypass: {'Enabled' if ENABLE_URGENT_BYPASS else 'Disabled'}")
     print(f"   Max concurrent trades: {MAX_CONCURRENT_TRADES}")
     print(f"   Press CTRL+C to stop gracefully\n")
 
@@ -532,8 +648,23 @@ def run_continuous_trading():
         while running:
             iteration_count += 1
 
+            # Check if AI detected urgent opportunity
+            force_execution = False
+
+            # Get AI strategy to check urgency
+            ai_strategy = None
+            for strategy in STRATEGY_MANAGER.strategies:
+                if isinstance(strategy, AIStrategy) and strategy.enabled:
+                    ai_strategy = strategy
+                    break
+
             # Perform trading iteration
-            trading_iteration(SYMBOL)
+            # If urgent bypass is enabled and AI marked last decision as urgent, force execution
+            if ENABLE_URGENT_BYPASS and ai_strategy and ai_strategy.is_last_decision_urgent():
+                force_execution = True
+                print("🚨 URGENT OPPORTUNITY DETECTED - Bypassing trade cooldown!")
+
+            trading_iteration(SYMBOL, force_execution=force_execution)
 
             # Display open positions summary
             positions = get_open_positions()
@@ -542,11 +673,11 @@ def run_continuous_trading():
             if not running:
                 break
 
-            # Wait for next iteration
-            print(f"\n⏳ Waiting {TRADE_INTERVAL} seconds until next check...")
+            # Wait for next analysis iteration (much shorter than trade interval)
+            print(f"\n⏳ Next analysis in {ANALYSIS_INTERVAL} seconds...")
 
             # Sleep in small increments to allow for responsive shutdown
-            for _ in range(TRADE_INTERVAL):
+            for _ in range(ANALYSIS_INTERVAL):
                 if not running:
                     break
                 time.sleep(1)

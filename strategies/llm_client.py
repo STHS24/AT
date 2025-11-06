@@ -90,7 +90,45 @@ class LLMClient:
         
         # Parse and validate response
         return self._parse_trading_response(response_data)
-    
+
+    def get_position_management_decision(self, market_context: Dict[str, Any],
+                                        temperature: float = 0.7) -> Optional[Dict[str, Any]]:
+        """
+        Get position management decision from LLM.
+
+        Args:
+            market_context: Dictionary containing position and market data
+            temperature: LLM temperature (0.0-1.0)
+
+        Returns:
+            Dictionary with action (HOLD/CLOSE/CLOSE_PARTIAL), reasoning, and confidence
+        """
+        # Build position management system prompt
+        system_prompt = self._build_position_management_system_prompt()
+
+        # Build user prompt from market context
+        user_prompt = self._build_position_prompt(market_context)
+
+        # Prepare request payload
+        payload = {
+            "model": self.model,
+            "messages": [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt}
+            ],
+            "temperature": temperature,
+            "max_tokens": 1000
+        }
+
+        # Make API call with retry logic
+        response_data = self._make_request_with_retry(payload)
+
+        if response_data is None:
+            return None
+
+        # Parse and validate response
+        return self._parse_position_response(response_data)
+
     def _build_default_system_prompt(self) -> str:
         """Build default system prompt for trading AI."""
         return """You are an expert forex trading AI assistant with deep knowledge of technical analysis, risk management, and market psychology.
@@ -106,11 +144,14 @@ You must respond in valid JSON format with the following structure:
     "decision": "BUY" | "SELL" | "NONE",
     "reasoning": "Detailed explanation of your analysis and decision",
     "confidence": 0.0-1.0,
-    "key_factors": ["factor1", "factor2", "factor3"]
+    "key_factors": ["factor1", "factor2", "factor3"],
+    "urgent": true | false
 }
 
 Guidelines:
 - Only recommend BUY/SELL when you have strong conviction (confidence > 0.7)
+- Mark "urgent": true ONLY for time-sensitive opportunities that require immediate action (e.g., strong breakout, critical support/resistance test, extreme volatility)
+- Mark "urgent": false for normal trading opportunities
 - Consider risk management and current exposure
 - Explain your reasoning clearly
 - Be conservative - it's better to wait than force a trade
@@ -196,9 +237,111 @@ Guidelines:
         prompt_parts.append(f"\n{'='*60}")
         prompt_parts.append("Based on the above analysis, what trading action should be taken?")
         prompt_parts.append("Respond with a JSON object containing your decision, reasoning, confidence, and key factors.")
-        
+
         return "\n".join(prompt_parts)
-    
+
+    def _build_position_management_system_prompt(self) -> str:
+        """Build system prompt for position management AI."""
+        return """You are an expert forex trading AI assistant specializing in position management and risk optimization.
+
+Your role is to analyze open positions and decide whether to:
+- HOLD: Keep the position open (market conditions still favorable)
+- CLOSE: Close the entire position (conditions changed, take profit/loss)
+- CLOSE_PARTIAL: Close part of the position (lock in some profit, reduce risk)
+
+Consider:
+- Current market conditions vs entry conditions
+- Unrealized P/L and position duration
+- Technical indicators and trend changes
+- Risk/reward ratio and profit targets
+- Market volatility and momentum
+
+You must respond in valid JSON format:
+{
+    "action": "HOLD" | "CLOSE" | "CLOSE_PARTIAL",
+    "reasoning": "Detailed explanation of your analysis",
+    "confidence": 0.0-1.0,
+    "partial_percentage": 0.5 (only if CLOSE_PARTIAL, 0.0-1.0)
+}
+
+Guidelines:
+- Be conservative - don't close profitable positions prematurely
+- Consider trailing stops and profit protection
+- Close losing positions if conditions deteriorated significantly
+- Use CLOSE_PARTIAL to lock in profits while keeping upside potential
+- Confidence > 0.7 for closing decisions
+"""
+
+    def _build_position_prompt(self, market_context: Dict[str, Any]) -> str:
+        """
+        Build position analysis prompt.
+
+        Args:
+            market_context: Position and market data
+
+        Returns:
+            Formatted prompt string
+        """
+        prompt_parts = []
+
+        # Position details
+        if "position" in market_context:
+            pos = market_context["position"]
+            prompt_parts.append("OPEN POSITION:")
+            prompt_parts.append(f"  Ticket: #{pos.get('ticket', 'N/A')}")
+            prompt_parts.append(f"  Type: {pos.get('type', 'N/A')}")
+            prompt_parts.append(f"  Volume: {pos.get('volume', 'N/A')} lots")
+            prompt_parts.append(f"  Entry Price: {pos.get('price_open', 'N/A')}")
+            prompt_parts.append(f"  Current Price: {pos.get('price_current', 'N/A')}")
+            prompt_parts.append(f"  Stop Loss: {pos.get('sl', 'N/A')}")
+            prompt_parts.append(f"  Take Profit: {pos.get('tp', 'N/A')}")
+            prompt_parts.append(f"  Unrealized P/L: ${pos.get('profit', 0):.2f} ({pos.get('pips', 0):.1f} pips)")
+            prompt_parts.append(f"  Duration: {pos.get('duration', 'N/A')}")
+
+        # Current market conditions
+        if "current_price" in market_context:
+            price_data = market_context["current_price"]
+            prompt_parts.append(f"\nCURRENT MARKET:")
+            prompt_parts.append(f"  Bid: {price_data.get('bid', 'N/A')}")
+            prompt_parts.append(f"  Ask: {price_data.get('ask', 'N/A')}")
+            prompt_parts.append(f"  Spread: {price_data.get('spread', 'N/A')} pips")
+
+        # Technical indicators
+        if "indicators" in market_context:
+            indicators = market_context["indicators"]
+            prompt_parts.append(f"\nTECHNICAL INDICATORS:")
+            for indicator_name, indicator_data in indicators.items():
+                if isinstance(indicator_data, dict):
+                    prompt_parts.append(f"  {indicator_name}:")
+                    for key, value in indicator_data.items():
+                        prompt_parts.append(f"    {key}: {value}")
+                else:
+                    prompt_parts.append(f"  {indicator_name}: {indicator_data}")
+
+        # Price action
+        if "price_action" in market_context:
+            price_action = market_context["price_action"]
+            prompt_parts.append(f"\nPRICE ACTION:")
+            for timeframe, data in price_action.items():
+                prompt_parts.append(f"  {timeframe}:")
+                for key, value in data.items():
+                    prompt_parts.append(f"    {key}: {value}")
+
+        # Account status
+        if "account" in market_context:
+            account = market_context["account"]
+            prompt_parts.append(f"\nACCOUNT STATUS:")
+            prompt_parts.append(f"  Balance: ${account.get('balance', 0):.2f}")
+            prompt_parts.append(f"  Equity: ${account.get('equity', 0):.2f}")
+            prompt_parts.append(f"  Daily P/L: ${account.get('daily_pnl', 0):.2f}")
+
+        # Add decision request
+        prompt_parts.append(f"\n{'='*60}")
+        prompt_parts.append("Should this position be held, closed, or partially closed?")
+        prompt_parts.append("Respond with a JSON object containing your action, reasoning, and confidence.")
+
+        return "\n".join(prompt_parts)
+
     def _make_request_with_retry(self, payload: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         """
         Make API request with exponential backoff retry logic.
@@ -233,8 +376,14 @@ Guidelines:
                 
                 # Handle rate limiting
                 elif response.status_code == 429:
-                    wait_time = 2 ** attempt  # Exponential backoff
-                    print(f"[LLMClient] Rate limited. Waiting {wait_time}s before retry {attempt + 1}/{self.max_retries}")
+                    # Check for Retry-After header
+                    retry_after = response.headers.get('Retry-After')
+                    if retry_after:
+                        wait_time = int(retry_after)
+                    else:
+                        wait_time = min(2 ** attempt, 30)  # Exponential backoff, max 30s
+
+                    print(f"[LLMClient] ⚠️  Rate limited. Waiting {wait_time}s before retry {attempt + 1}/{self.max_retries}")
                     time.sleep(wait_time)
                     continue
                 
@@ -321,9 +470,10 @@ Guidelines:
                 "reasoning": decision_data.get("reasoning", "No reasoning provided"),
                 "confidence": float(decision_data.get("confidence", 0.5)),
                 "key_factors": decision_data.get("key_factors", []),
+                "urgent": bool(decision_data.get("urgent", False)),
                 "timestamp": datetime.now().isoformat()
             }
-            
+
             return result
             
         except json.JSONDecodeError as e:
@@ -334,7 +484,79 @@ Guidelines:
         except Exception as e:
             print(f"[LLMClient] Error parsing response: {e}")
             return None
-    
+
+    def _parse_position_response(self, response_data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        """
+        Parse and validate position management LLM response.
+
+        Args:
+            response_data: Raw API response
+
+        Returns:
+            Parsed position decision or None if invalid
+        """
+        try:
+            # Extract message content
+            if "choices" not in response_data or len(response_data["choices"]) == 0:
+                print("[LLMClient] No choices in response")
+                return None
+
+            content = response_data["choices"][0]["message"]["content"]
+
+            # Try to parse JSON from content
+            json_str = content.strip()
+
+            # Remove markdown code blocks if present
+            if json_str.startswith("```"):
+                lines = json_str.split("\n")
+                json_str = "\n".join(lines[1:-1]) if len(lines) > 2 else json_str
+                json_str = json_str.replace("```json", "").replace("```", "").strip()
+
+            # Try to extract JSON object if there's extra text
+            start_idx = json_str.find("{")
+            end_idx = json_str.rfind("}")
+
+            if start_idx != -1 and end_idx != -1 and end_idx > start_idx:
+                json_str = json_str[start_idx:end_idx + 1]
+
+            # Parse JSON
+            decision_data = json.loads(json_str)
+
+            # Validate required fields
+            if "action" not in decision_data:
+                print("[LLMClient] Missing 'action' field in response")
+                return None
+
+            # Validate action value
+            action = decision_data["action"].upper()
+            if action not in ["HOLD", "CLOSE", "CLOSE_PARTIAL"]:
+                print(f"[LLMClient] Invalid action value: {action}")
+                return None
+
+            # Ensure all fields are present
+            result = {
+                "action": action,
+                "reasoning": decision_data.get("reasoning", "No reasoning provided"),
+                "confidence": float(decision_data.get("confidence", 0.5)),
+                "partial_percentage": float(decision_data.get("partial_percentage", 0.5)),
+                "timestamp": datetime.now().isoformat()
+            }
+
+            # Validate partial_percentage range
+            if result["partial_percentage"] < 0.0 or result["partial_percentage"] > 1.0:
+                result["partial_percentage"] = 0.5  # Default to 50%
+
+            return result
+
+        except json.JSONDecodeError as e:
+            print(f"[LLMClient] Failed to parse JSON response: {e}")
+            print(f"[LLMClient] Raw content: {content[:200]}...")
+            return None
+
+        except Exception as e:
+            print(f"[LLMClient] Error parsing position response: {e}")
+            return None
+
     def get_statistics(self) -> Dict[str, Any]:
         """
         Get client statistics.

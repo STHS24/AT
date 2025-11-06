@@ -74,7 +74,10 @@ class AIStrategy(BaseStrategy):
         
         # Decision history for logging and analysis
         self.decision_history = []
-        
+
+        # Track last decision urgency
+        self.last_decision_urgent = False
+
         print(f"[{self.name}] Initialized with model: {self.params['model']}")
         print(f"[{self.name}] Confidence threshold: {self.params['confidence_threshold']}")
     
@@ -120,9 +123,13 @@ class AIStrategy(BaseStrategy):
         reasoning = decision_data.get("reasoning", "No reasoning provided")
         confidence = decision_data.get("confidence", 0.0)
         key_factors = decision_data.get("key_factors", [])
-        
+        urgent = decision_data.get("urgent", False)
+
+        # Store urgency flag
+        self.last_decision_urgent = urgent
+
         # Log decision
-        self._log_decision(symbol, decision, reasoning, confidence, key_factors)
+        self._log_decision(symbol, decision, reasoning, confidence, key_factors, urgent)
         
         # Apply confidence threshold
         confidence_threshold = self.params["confidence_threshold"]
@@ -133,7 +140,8 @@ class AIStrategy(BaseStrategy):
                 print(f"[{self.name}] 💭 Reasoning: {reasoning[:150]}...")
                 return "NONE"
             else:
-                print(f"[{self.name}] ✅ AI Decision: {decision} (Confidence: {confidence:.2f})")
+                urgency_flag = "🚨 URGENT" if urgent else ""
+                print(f"[{self.name}] ✅ AI Decision: {decision} {urgency_flag} (Confidence: {confidence:.2f})")
                 print(f"[{self.name}] 💭 Reasoning: {reasoning}")
                 if key_factors:
                     print(f"[{self.name}] 🔑 Key Factors:")
@@ -144,18 +152,139 @@ class AIStrategy(BaseStrategy):
             print(f"[{self.name}] ⏸️  AI Decision: NONE (Hold)")
             print(f"[{self.name}] 💭 Reasoning: {reasoning[:150]}...")
             return "NONE"
-    
-    def _log_decision(self, symbol: str, decision: str, reasoning: str, 
-                     confidence: float, key_factors: list):
+
+    def is_last_decision_urgent(self) -> bool:
+        """
+        Check if the last decision was marked as urgent.
+
+        Returns:
+            bool: True if last decision was urgent
+        """
+        return self.last_decision_urgent
+
+    def analyze_position(self, position, symbol: str) -> Dict[str, Any]:
+        """
+        Analyze an open position and get AI recommendation.
+
+        Args:
+            position: MT5 position object
+            symbol: Trading symbol
+
+        Returns:
+            Dict with keys:
+                - action: "HOLD", "CLOSE", or "CLOSE_PARTIAL"
+                - reasoning: AI reasoning for the decision
+                - confidence: Confidence score (0.0-1.0)
+                - partial_percentage: If CLOSE_PARTIAL, percentage to close (0.0-1.0)
+        """
+        print(f"\n[{self.name}] 🔍 Analyzing position #{position.ticket} with AI...")
+
+        # Collect market context including position details
+        try:
+            market_context = self.market_analyzer.get_position_analysis_context(
+                position,
+                symbol,
+                self.params.get("config", {})
+            )
+        except Exception as e:
+            print(f"[{self.name}] ❌ Error collecting position data: {e}")
+            return {"action": "HOLD", "reasoning": "Error collecting data", "confidence": 0.0}
+
+        # Get AI position management decision
+        try:
+            decision_data = self.llm_client.get_position_management_decision(
+                market_context=market_context,
+                temperature=self.params["temperature"]
+            )
+        except Exception as e:
+            print(f"[{self.name}] ❌ Error getting AI position decision: {e}")
+            return {"action": "HOLD", "reasoning": "API error", "confidence": 0.0}
+
+        # Handle API failure
+        if decision_data is None:
+            print(f"[{self.name}] ❌ Failed to get AI position decision (API error)")
+            return {"action": "HOLD", "reasoning": "API failure", "confidence": 0.0}
+
+        # Extract decision details
+        action = decision_data.get("action", "HOLD")
+        reasoning = decision_data.get("reasoning", "No reasoning provided")
+        confidence = decision_data.get("confidence", 0.0)
+        partial_percentage = decision_data.get("partial_percentage", 0.5)
+
+        # Log position decision
+        self._log_position_decision(position.ticket, symbol, action, reasoning, confidence, partial_percentage)
+
+        # Apply confidence threshold for closing decisions
+        confidence_threshold = self.params["confidence_threshold"]
+
+        if action in ["CLOSE", "CLOSE_PARTIAL"]:
+            if confidence < confidence_threshold:
+                print(f"[{self.name}] ⚠️  AI suggested {action} but confidence ({confidence:.2f}) below threshold ({confidence_threshold})")
+                print(f"[{self.name}] 💭 Reasoning: {reasoning[:150]}...")
+                return {"action": "HOLD", "reasoning": reasoning, "confidence": confidence}
+            else:
+                print(f"[{self.name}] ✅ AI Position Decision: {action} (Confidence: {confidence:.2f})")
+                print(f"[{self.name}] 💭 Reasoning: {reasoning}")
+                return {
+                    "action": action,
+                    "reasoning": reasoning,
+                    "confidence": confidence,
+                    "partial_percentage": partial_percentage
+                }
+        else:
+            print(f"[{self.name}] 📊 AI Position Decision: HOLD")
+            print(f"[{self.name}] 💭 Reasoning: {reasoning[:150]}...")
+            return {"action": "HOLD", "reasoning": reasoning, "confidence": confidence}
+
+    def _log_position_decision(self, ticket: int, symbol: str, action: str,
+                               reasoning: str, confidence: float, partial_percentage: float = None):
+        """
+        Log AI position management decision.
+
+        Args:
+            ticket: Position ticket number
+            symbol: Trading symbol
+            action: Position action (HOLD/CLOSE/CLOSE_PARTIAL)
+            reasoning: AI reasoning
+            confidence: Confidence score
+            partial_percentage: Percentage to close if CLOSE_PARTIAL
+        """
+        log_entry = {
+            "timestamp": datetime.now().isoformat(),
+            "ticket": ticket,
+            "symbol": symbol,
+            "action": action,
+            "reasoning": reasoning,
+            "confidence": confidence,
+            "partial_percentage": partial_percentage,
+            "model": self.params["model"],
+            "type": "position_management"
+        }
+
+        self.decision_history.append(log_entry)
+
+        # Keep only last 100 decisions in memory
+        if len(self.decision_history) > 100:
+            self.decision_history = self.decision_history[-100:]
+
+        # Save to file
+        try:
+            self._save_decision_to_file(log_entry)
+        except Exception as e:
+            print(f"[{self.name}] ⚠️  Could not save position decision to file: {e}")
+
+    def _log_decision(self, symbol: str, decision: str, reasoning: str,
+                     confidence: float, key_factors: list, urgent: bool = False):
         """
         Log AI decision for analysis and debugging.
-        
+
         Args:
             symbol: Trading symbol
             decision: Trading decision
             reasoning: AI reasoning
             confidence: Confidence score
             key_factors: Key factors in decision
+            urgent: Whether decision is urgent
         """
         log_entry = {
             "timestamp": datetime.now().isoformat(),
@@ -164,6 +293,7 @@ class AIStrategy(BaseStrategy):
             "reasoning": reasoning,
             "confidence": confidence,
             "key_factors": key_factors,
+            "urgent": urgent,
             "model": self.params["model"]
         }
         

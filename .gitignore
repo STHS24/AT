@@ -85,7 +85,8 @@ logs/reports/
 logs/daily_pnl.json
 logs/trades.log
 logs/trades.csv
-logs/trades.db
+logs/trades.
+logs/ai_decisions.jsonl
 
 # Configuration - sensitive data
 config/settings.local.json
