@@ -130,151 +130,141 @@ class LLMClient:
         return self._parse_position_response(response_data)
 
     def _build_default_system_prompt(self) -> str:
-        """Build default system prompt for trading AI."""
-        return """You are an expert forex trading AI assistant with deep knowledge of technical analysis, risk management, and market psychology.
+        """Build compact system prompt for trading AI (optimized for tokens)."""
+        return """Forex AI. Analyze, decide BUY/SELL/NONE.
 
-Your role is to analyze market data and provide trading decisions (BUY, SELL, or NONE) based on:
-- Technical indicators (RSI, MACD, Moving Averages, ATR, Bollinger Bands)
-- Price action and trends across multiple timeframes
-- Current positions and risk exposure
-- Market volatility and conditions
-
-You must respond in valid JSON format with the following structure:
+JSON:
 {
-    "decision": "BUY" | "SELL" | "NONE",
-    "reasoning": "Detailed explanation of your analysis and decision",
+    "decision": "BUY"|"SELL"|"NONE",
+    "reasoning": "Brief explanation",
     "confidence": 0.0-1.0,
-    "key_factors": ["factor1", "factor2", "factor3"],
-    "urgent": true | false
+    "key_factors": ["factor1", "factor2"],
+    "urgent": true|false
 }
 
-Guidelines:
-- Only recommend BUY/SELL when you have strong conviction (confidence > 0.7)
-- Mark "urgent": true ONLY for time-sensitive opportunities that require immediate action (e.g., strong breakout, critical support/resistance test, extreme volatility)
-- Mark "urgent": false for normal trading opportunities
-- Consider risk management and current exposure
-- Explain your reasoning clearly
-- Be conservative - it's better to wait than force a trade
-- Consider multiple timeframes for confirmation
+Rules:
+- BUY/SELL only if confidence > 0.7
+- urgent=true ONLY for breakouts, critical levels, extreme volatility
+- Consider indicators, trends, risk, positions
+- Be conservative
 """
     
     def _build_user_prompt(self, market_context: Dict[str, Any]) -> str:
         """
-        Build user prompt from market context.
-        
+        Build compact user prompt from market context (optimized for token usage).
+
         Args:
             market_context: Market data and trading context
-            
+
         Returns:
             Formatted prompt string
         """
-        prompt_parts = []
-        
-        # Symbol and current price
+        parts = []
+
+        # Symbol and price (compact)
         if "symbol" in market_context:
-            prompt_parts.append(f"SYMBOL: {market_context['symbol']}")
-        
+            parts.append(f"{market_context['symbol']}")
+
         if "current_price" in market_context:
-            price_data = market_context["current_price"]
-            prompt_parts.append(f"\nCURRENT PRICE:")
-            prompt_parts.append(f"  Bid: {price_data.get('bid', 'N/A')}")
-            prompt_parts.append(f"  Ask: {price_data.get('ask', 'N/A')}")
-            prompt_parts.append(f"  Spread: {price_data.get('spread', 'N/A')} pips")
-        
-        # Technical indicators
+            p = market_context["current_price"]
+            parts.append(f"Price: {p.get('bid')}/{p.get('ask')} (spread {p.get('spread')}p)")
+
+        # Technical indicators (compact)
         if "indicators" in market_context:
-            indicators = market_context["indicators"]
-            prompt_parts.append(f"\nTECHNICAL INDICATORS:")
-            
-            for indicator_name, indicator_data in indicators.items():
-                if isinstance(indicator_data, dict):
-                    prompt_parts.append(f"  {indicator_name}:")
-                    for key, value in indicator_data.items():
-                        prompt_parts.append(f"    {key}: {value}")
-                else:
-                    prompt_parts.append(f"  {indicator_name}: {indicator_data}")
-        
-        # Price action
+            ind = market_context["indicators"]
+            ind_parts = []
+
+            # RSI
+            if "RSI_14" in ind:
+                rsi = ind["RSI_14"]
+                ind_parts.append(f"RSI:{rsi.get('value')}({rsi.get('status')})")
+
+            # MACD
+            if "MACD" in ind:
+                macd = ind["MACD"]
+                ind_parts.append(f"MACD:{macd.get('histogram'):.5f}({macd.get('status')})")
+
+            # Moving Averages
+            if "MA_20" in ind:
+                ma20 = ind["MA_20"]
+                ind_parts.append(f"MA20:{ma20.get('position')}")
+            if "MA_50" in ind:
+                ma50 = ind["MA_50"]
+                ind_parts.append(f"MA50:{ma50.get('position')}")
+
+            # ATR
+            if "ATR_14" in ind:
+                atr = ind["ATR_14"]
+                ind_parts.append(f"ATR:{atr.get('pips')}p({atr.get('volatility')})")
+
+            # Bollinger Bands
+            if "Bollinger_Bands" in ind:
+                bb = ind["Bollinger_Bands"]
+                ind_parts.append(f"BB:{bb.get('position')}")
+
+            if ind_parts:
+                parts.append(f"Indicators: {', '.join(ind_parts)}")
+
+        # Price action (compact)
         if "price_action" in market_context:
-            price_action = market_context["price_action"]
-            prompt_parts.append(f"\nPRICE ACTION:")
-            for timeframe, data in price_action.items():
-                prompt_parts.append(f"  {timeframe}:")
-                for key, value in data.items():
-                    prompt_parts.append(f"    {key}: {value}")
-        
-        # Current positions
+            pa = market_context["price_action"]
+            pa_parts = []
+            for tf, data in pa.items():
+                trend = data.get('trend', 'N/A')
+                change = data.get('change_pct', 0)
+                pa_parts.append(f"{tf}:{trend}({change:+.2f}%)")
+            if pa_parts:
+                parts.append(f"Trends: {', '.join(pa_parts)}")
+
+        # Positions (compact)
         if "positions" in market_context:
-            positions = market_context["positions"]
-            prompt_parts.append(f"\nCURRENT POSITIONS:")
-            if positions:
-                for pos in positions:
-                    prompt_parts.append(f"  - {pos.get('type', 'N/A')} {pos.get('volume', 'N/A')} lots @ {pos.get('price', 'N/A')}")
-                    prompt_parts.append(f"    P/L: ${pos.get('profit', 0):.2f} ({pos.get('pips', 0):.1f} pips)")
+            pos = market_context["positions"]
+            if pos:
+                pos_parts = []
+                for p in pos:
+                    pos_parts.append(f"{p.get('type')} {p.get('volume')}@{p.get('price')} P/L:{p.get('pips'):.1f}p")
+                parts.append(f"Positions: {', '.join(pos_parts)}")
             else:
-                prompt_parts.append("  No open positions")
-        
-        # Account status
+                parts.append("Positions: None")
+
+        # Account (compact)
         if "account" in market_context:
-            account = market_context["account"]
-            prompt_parts.append(f"\nACCOUNT STATUS:")
-            prompt_parts.append(f"  Balance: ${account.get('balance', 0):.2f}")
-            prompt_parts.append(f"  Equity: ${account.get('equity', 0):.2f}")
-            prompt_parts.append(f"  Margin Free: ${account.get('margin_free', 0):.2f}")
-            prompt_parts.append(f"  Daily P/L: ${account.get('daily_pnl', 0):.2f}")
-        
-        # Risk constraints
+            acc = market_context["account"]
+            parts.append(f"Account: Bal ${acc.get('balance', 0):.0f}, Eq ${acc.get('equity', 0):.0f}, DayPL ${acc.get('daily_pnl', 0):.2f}")
+
+        # Risk (compact)
         if "risk_constraints" in market_context:
             risk = market_context["risk_constraints"]
-            prompt_parts.append(f"\nRISK CONSTRAINTS:")
-            prompt_parts.append(f"  Risk per trade: {risk.get('risk_percentage', 0):.1f}%")
-            prompt_parts.append(f"  Daily loss limit: ${risk.get('daily_loss_limit', 0):.2f}")
-            prompt_parts.append(f"  Daily loss remaining: ${risk.get('daily_loss_remaining', 0):.2f}")
-            prompt_parts.append(f"  Max concurrent trades: {risk.get('max_concurrent_trades', 0)}")
-            prompt_parts.append(f"  Current open trades: {risk.get('current_open_trades', 0)}")
-        
-        # Add decision request
-        prompt_parts.append(f"\n{'='*60}")
-        prompt_parts.append("Based on the above analysis, what trading action should be taken?")
-        prompt_parts.append("Respond with a JSON object containing your decision, reasoning, confidence, and key factors.")
+            parts.append(f"Risk: {risk.get('risk_percentage', 0):.1f}%/trade, {risk.get('current_open_trades', 0)}/{risk.get('max_concurrent_trades', 0)} trades, ${risk.get('daily_loss_remaining', 0):.0f} remaining")
 
-        return "\n".join(prompt_parts)
+        # Decision request
+        parts.append("\nDecide: BUY/SELL/NONE? Respond JSON.")
+
+        return "\n".join(parts)
 
     def _build_position_management_system_prompt(self) -> str:
-        """Build system prompt for position management AI."""
-        return """You are an expert forex trading AI assistant specializing in position management and risk optimization.
+        """Build compact system prompt for position management (optimized for tokens)."""
+        return """Position management AI. Decide: HOLD/CLOSE/CLOSE_PARTIAL.
 
-Your role is to analyze open positions and decide whether to:
-- HOLD: Keep the position open (market conditions still favorable)
-- CLOSE: Close the entire position (conditions changed, take profit/loss)
-- CLOSE_PARTIAL: Close part of the position (lock in some profit, reduce risk)
-
-Consider:
-- Current market conditions vs entry conditions
-- Unrealized P/L and position duration
-- Technical indicators and trend changes
-- Risk/reward ratio and profit targets
-- Market volatility and momentum
-
-You must respond in valid JSON format:
+JSON:
 {
-    "action": "HOLD" | "CLOSE" | "CLOSE_PARTIAL",
-    "reasoning": "Detailed explanation of your analysis",
+    "action": "HOLD"|"CLOSE"|"CLOSE_PARTIAL",
+    "reasoning": "Brief explanation",
     "confidence": 0.0-1.0,
-    "partial_percentage": 0.5 (only if CLOSE_PARTIAL, 0.0-1.0)
+    "partial_percentage": 0.5 (if CLOSE_PARTIAL)
 }
 
-Guidelines:
-- Be conservative - don't close profitable positions prematurely
-- Consider trailing stops and profit protection
-- Close losing positions if conditions deteriorated significantly
-- Use CLOSE_PARTIAL to lock in profits while keeping upside potential
-- Confidence > 0.7 for closing decisions
+Rules:
+- HOLD if conditions favorable
+- CLOSE if trend reversed or target hit
+- CLOSE_PARTIAL to lock profit, keep upside
+- Confidence > 0.7 for closing
+- Be conservative
 """
 
     def _build_position_prompt(self, market_context: Dict[str, Any]) -> str:
         """
-        Build position analysis prompt.
+        Build compact position analysis prompt (optimized for tokens).
 
         Args:
             market_context: Position and market data
@@ -282,65 +272,61 @@ Guidelines:
         Returns:
             Formatted prompt string
         """
-        prompt_parts = []
+        parts = []
 
-        # Position details
+        # Position details (compact)
         if "position" in market_context:
             pos = market_context["position"]
-            prompt_parts.append("OPEN POSITION:")
-            prompt_parts.append(f"  Ticket: #{pos.get('ticket', 'N/A')}")
-            prompt_parts.append(f"  Type: {pos.get('type', 'N/A')}")
-            prompt_parts.append(f"  Volume: {pos.get('volume', 'N/A')} lots")
-            prompt_parts.append(f"  Entry Price: {pos.get('price_open', 'N/A')}")
-            prompt_parts.append(f"  Current Price: {pos.get('price_current', 'N/A')}")
-            prompt_parts.append(f"  Stop Loss: {pos.get('sl', 'N/A')}")
-            prompt_parts.append(f"  Take Profit: {pos.get('tp', 'N/A')}")
-            prompt_parts.append(f"  Unrealized P/L: ${pos.get('profit', 0):.2f} ({pos.get('pips', 0):.1f} pips)")
-            prompt_parts.append(f"  Duration: {pos.get('duration', 'N/A')}")
+            parts.append(f"Position #{pos.get('ticket')}: {pos.get('type')} {pos.get('volume')}lots @{pos.get('price_open')} → {pos.get('price_current')}")
+            parts.append(f"SL:{pos.get('sl')} TP:{pos.get('tp')} P/L:${pos.get('profit', 0):.2f}({pos.get('pips', 0):.1f}p) Duration:{pos.get('duration')}")
 
-        # Current market conditions
+        # Current market (compact)
         if "current_price" in market_context:
-            price_data = market_context["current_price"]
-            prompt_parts.append(f"\nCURRENT MARKET:")
-            prompt_parts.append(f"  Bid: {price_data.get('bid', 'N/A')}")
-            prompt_parts.append(f"  Ask: {price_data.get('ask', 'N/A')}")
-            prompt_parts.append(f"  Spread: {price_data.get('spread', 'N/A')} pips")
+            p = market_context["current_price"]
+            parts.append(f"Market: {p.get('bid')}/{p.get('ask')} (spread {p.get('spread')}p)")
 
-        # Technical indicators
+        # Technical indicators (compact)
         if "indicators" in market_context:
-            indicators = market_context["indicators"]
-            prompt_parts.append(f"\nTECHNICAL INDICATORS:")
-            for indicator_name, indicator_data in indicators.items():
-                if isinstance(indicator_data, dict):
-                    prompt_parts.append(f"  {indicator_name}:")
-                    for key, value in indicator_data.items():
-                        prompt_parts.append(f"    {key}: {value}")
-                else:
-                    prompt_parts.append(f"  {indicator_name}: {indicator_data}")
+            ind = market_context["indicators"]
+            ind_parts = []
 
-        # Price action
+            if "RSI_14" in ind:
+                rsi = ind["RSI_14"]
+                ind_parts.append(f"RSI:{rsi.get('value')}({rsi.get('status')})")
+            if "MACD" in ind:
+                macd = ind["MACD"]
+                ind_parts.append(f"MACD:{macd.get('histogram'):.5f}({macd.get('status')})")
+            if "MA_20" in ind:
+                ind_parts.append(f"MA20:{ind['MA_20'].get('position')}")
+            if "MA_50" in ind:
+                ind_parts.append(f"MA50:{ind['MA_50'].get('position')}")
+            if "ATR_14" in ind:
+                atr = ind["ATR_14"]
+                ind_parts.append(f"ATR:{atr.get('pips')}p({atr.get('volatility')})")
+            if "Bollinger_Bands" in ind:
+                ind_parts.append(f"BB:{ind['Bollinger_Bands'].get('position')}")
+
+            if ind_parts:
+                parts.append(f"Indicators: {', '.join(ind_parts)}")
+
+        # Price action (compact)
         if "price_action" in market_context:
-            price_action = market_context["price_action"]
-            prompt_parts.append(f"\nPRICE ACTION:")
-            for timeframe, data in price_action.items():
-                prompt_parts.append(f"  {timeframe}:")
-                for key, value in data.items():
-                    prompt_parts.append(f"    {key}: {value}")
+            pa = market_context["price_action"]
+            pa_parts = []
+            for tf, data in pa.items():
+                pa_parts.append(f"{tf}:{data.get('trend')}({data.get('change_pct', 0):+.2f}%)")
+            if pa_parts:
+                parts.append(f"Trends: {', '.join(pa_parts)}")
 
-        # Account status
+        # Account (compact)
         if "account" in market_context:
-            account = market_context["account"]
-            prompt_parts.append(f"\nACCOUNT STATUS:")
-            prompt_parts.append(f"  Balance: ${account.get('balance', 0):.2f}")
-            prompt_parts.append(f"  Equity: ${account.get('equity', 0):.2f}")
-            prompt_parts.append(f"  Daily P/L: ${account.get('daily_pnl', 0):.2f}")
+            acc = market_context["account"]
+            parts.append(f"Account: Bal ${acc.get('balance', 0):.0f}, Eq ${acc.get('equity', 0):.0f}, DayPL ${acc.get('daily_pnl', 0):.2f}")
 
-        # Add decision request
-        prompt_parts.append(f"\n{'='*60}")
-        prompt_parts.append("Should this position be held, closed, or partially closed?")
-        prompt_parts.append("Respond with a JSON object containing your action, reasoning, and confidence.")
+        # Decision request
+        parts.append("\nHOLD/CLOSE/CLOSE_PARTIAL? Respond JSON.")
 
-        return "\n".join(prompt_parts)
+        return "\n".join(parts)
 
     def _make_request_with_retry(self, payload: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         """

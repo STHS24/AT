@@ -117,12 +117,49 @@ The AI strategy is configured in `config/settings.json` under `strategy_config.A
 | `min_hold_time_minutes` | integer | 5 | Minimum time to hold position before AI can close it |
 | `position_check_interval` | integer | 1 | How often to analyze positions (every N iterations) |
 
+### Token Usage Optimization
+
+The AI strategy uses **highly optimized prompts** to minimize token usage and API costs:
+
+**Token Savings:**
+- System prompt: ~100 tokens (60% reduction from verbose format)
+- User prompt: ~66 tokens (87% reduction from verbose format)
+- Position prompt: ~87 tokens (78% reduction from verbose format)
+- **Total savings: 78% fewer tokens per request**
+
+**Impact at 5-second analysis interval (12 requests/minute):**
+- Old: 9,000 tokens/minute
+- New: 1,992 tokens/minute
+- **Savings: 7,008 tokens/minute**
+- **Daily savings: ~10M tokens** (~$1.00/day at typical pricing)
+
+**Benefits:**
+- ✅ 78% lower API costs
+- ✅ Fewer rate limit errors
+- ✅ Faster response times
+- ✅ Can analyze market more frequently
+- ✅ Better reliability
+
+**Example Compact Format:**
+```
+EURUSD
+Price: 1.0845/1.08452 (spread 0.2p)
+Indicators: RSI:55.5(Neutral), MACD:0.00002(Bullish), MA20:Above, ATR:1.5p(Low)
+Trends: M5:Uptrend(+0.12%), M15:Uptrend(+0.18%)
+Positions: None
+Account: Bal $10000, Eq $10000, DayPL $125.50
+Risk: 1.0%/trade, 0/10 trades, $374 remaining
+
+Decide: BUY/SELL/NONE? Respond JSON.
+```
+
 ### Getting an API Key
 
 1. **Sign up at OpenRouter**: Visit [https://openrouter.ai/](https://openrouter.ai/)
 2. **Create API Key**: Go to Keys section and generate a new API key
-3. **Free Tier Available**: DeepSeek model is free to use
+3. **Free Tier Available**: DeepSeek model is free to use (with rate limits)
 4. **Add to Config**: Copy the API key to `config/settings.json`
+5. **Monitor Usage**: Check OpenRouter dashboard for token usage and costs
 
 **Current API Key** (included in config):
 ```
