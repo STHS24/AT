@@ -1,0 +1,125 @@
+{
+  "generated_by": "LLM_Agent_v2",
+  "sentiment": "Bearish",
+  "symbol": {
+    "pair": "EURUSD",
+    "base": "EUR",
+    "quote": "USD"
+  },
+  "price_data": {
+    "bid": 1.06625,
+    "ask": 1.06642,
+    "spread_pips": 1.7,
+    "timestamp": "2025-11-06T17:11:00-03:00"
+  },
+  "technical_indicators": {
+    "timeframe": "M5",
+    "bars_used": 100,
+    "RSI_14": {
+      "value": 31.8,
+      "status": "Oversold"
+    },
+    "MACD_12_26_9": {
+      "macd_line": -0.00027,
+      "signal_line": -0.00020,
+      "histogram": -0.00007,
+      "status": "Bearish"
+    },
+    "moving_averages": {
+      "MA_20": {
+        "value": 1.06710,
+        "position_vs_price": "Above"
+      },
+      "MA_50": {
+        "value": 1.06890,
+        "position_vs_price": "Above"
+      }
+    },
+    "ATR_14": {
+      "value_price_units": 0.00145,
+      "value_pips": 14.5,
+      "volatility_status": "Medium"
+    },
+    "BollingerBands_20_2": {
+      "upper_band": 1.06950,
+      "middle_band": 1.06710,
+      "lower_band": 1.06470,
+      "position": "Below middle (bearish zone)"
+    }
+  },
+  "multi_timeframe_price_action": {
+    "M1": {
+      "close": 1.06630,
+      "change": -0.00010,
+      "change_percent": -0.0094,
+      "trend": "Downtrend",
+      "high": 1.06650,
+      "low": 1.06620
+    },
+    "M5": {
+      "close": 1.06625,
+      "change": -0.00035,
+      "change_percent": -0.0327,
+      "trend": "Downtrend",
+      "high": 1.06690,
+      "low": 1.06600
+    },
+    "M15": {
+      "close": 1.06670,
+      "change": -0.00085,
+      "change_percent": -0.0795,
+      "trend": "Downtrend",
+      "high": 1.06810,
+      "low": 1.06600
+    },
+    "H1": {
+      "close": 1.06910,
+      "change": -0.00190,
+      "change_percent": -0.1775,
+      "trend": "Downtrend",
+      "high": 1.07140,
+      "low": 1.06620
+    }
+  },
+  "open_positions": [
+    {
+      "ticket": 1029341,
+      "type": "SELL",
+      "volume_lots": 0.20,
+      "entry_price": 1.06840,
+      "current_price": 1.06625,
+      "stop_loss": 1.07080,
+      "take_profit": 1.06200,
+      "profit_usd": 43.0,
+      "profit_pips": 21.5
+    },
+    {
+      "ticket": 1029342,
+      "type": "BUY",
+      "volume_lots": 0.10,
+      "entry_price": 1.06720,
+      "current_price": 1.06625,
+      "stop_loss": 1.06450,
+      "take_profit": 1.07050,
+      "profit_usd": -9.5,
+      "profit_pips": -9.5
+    }
+  ],
+  "account_status": {
+    "balance": 10000.00,
+    "equity": 10033.50,
+    "used_margin": 500.00,
+    "free_margin": 9533.50,
+    "margin_level_percent": 2006.7,
+    "daily_PL": -16.5
+  },
+  "risk_constraints": {
+    "risk_percentage_per_trade": 1.0,
+    "daily_loss_limit_usd": 200.00,
+    "daily_profit_target_usd": 150.00,
+    "max_concurrent_trades": 5,
+    "current_open_trades": 2,
+    "daily_loss_remaining": 183.50,
+    "daily_profit_remaining": 166.50
+  }
+}
