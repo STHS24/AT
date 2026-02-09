@@ -1,29 +1,33 @@
+import os
 import requests
 
-API_KEY = "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"
-MODEL = "deepseek/deepseek-chat-v3.1:free"
+API_KEY = os.getenv("DEEPSEEK_API_KEY")
+MODEL = "deepseek-reasoner"
+ENDPOINT = "https://api.deepseek.com/chat/completions"
+
+if not API_KEY:
+    raise RuntimeError("Missing DEEPSEEK_API_KEY environment variable")
 
 headers = {
     "Authorization": f"Bearer {API_KEY}",
     "Content-Type": "application/json",
-    "X-Title": "Hello World Test",
-    "HTTP-Referer": "https://openrouter.ai",  # use the main site domain
 }
 
 data = {
     "model": MODEL,
     "messages": [
         {"role": "system", "content": "You are a helpful assistant."},
-        {"role": "user", "content": "Hello, world!"}
-    ]
+        {"role": "user", "content": "Hello, world!"},
+    ],
 }
 
 response = requests.post(
-    "https://openrouter.ai/api/v1/chat/completions",
+    ENDPOINT,
     headers=headers,
-    json=data
+    json=data,
+    timeout=30,
 )
 
+response.raise_for_status()
 content = response.json()["choices"][0]["message"]["content"]
-print(content.strip().replace("<｜begin▁of▁sentence｜>", ""))
-
+print(content.strip())

@@ -8,25 +8,25 @@
   "max_concurrent_trades": 10,
   "enable_continuous_trading": true,
 
+  "ai_mode": {
+    "enabled": true,
+    "params": {
+      "api_key": "sk-71b0a4b4b7244015a74ca0efe819c8b4",
+      "model": "deepseek-reasoner",
+      "base_url": "https://api.deepseek.com/chat/completions",
+      "thinking": false,
+      "confidence_threshold": 0.7,
+      "temperature": 0.7,
+      "timeout": 30,
+      "max_retries": 3,
+      "enable_position_management": true,
+      "min_hold_time_minutes": 5
+    }
+  },
+
   "strategy_config": {
     "combination_method": "majority",
-    "enabled_strategies": ["AIStrategy"],
-
-    "AIStrategy": {
-      "enabled": true,
-      "weight": 1.0,
-      "params": {
-        "api_key": "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",
-        "model": "deepseek/deepseek-chat-v3.1:free",
-        "confidence_threshold": 0.7,
-        "temperature": 0.7,
-        "timeout": 30,
-        "max_retries": 3,
-        "enable_position_management": true,
-        "min_hold_time_minutes": 5,
-        "position_check_interval": 1
-      }
-    },
+    "enabled_strategies": ["SimpleStrategy", "MAStrategy"],
 
     "SimpleStrategy": {
       "enabled": false,

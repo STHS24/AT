@@ -68,7 +68,7 @@ Complete guide for using the TraderBot MetaTrader 5 automated trading system wit
 
 ### Overview
 
-The AI Strategy uses OpenRouter API to access Large Language Models (LLMs) for trading decisions. The AI analyzes comprehensive market data including:
+The AI Strategy uses the DeepSeek API (OpenAI-compatible) to access Large Language Models (LLMs) for trading decisions. The AI analyzes comprehensive market data including:
 
 - **Current Price**: Bid, ask, spread
 - **Technical Indicators**: RSI, MACD, Moving Averages, ATR, Bollinger Bands
@@ -79,25 +79,21 @@ The AI Strategy uses OpenRouter API to access Large Language Models (LLMs) for t
 
 ### Configuration Parameters
 
-The AI strategy is configured in `config/settings.json` under `strategy_config.AIStrategy`:
+The AI strategy is configured in `config/settings.json` under `ai_mode`:
 
 ```json
 {
-  "strategy_config": {
-    "combination_method": "majority",
-    "enabled_strategies": ["AIStrategy"],
-
-    "AIStrategy": {
-      "enabled": true,
-      "weight": 1.0,
-      "params": {
-        "api_key": "your-openrouter-api-key",
-        "model": "deepseek/deepseek-chat-v3.1:free",
-        "confidence_threshold": 0.7,
-        "temperature": 0.7,
-        "timeout": 30,
-        "max_retries": 3
-      }
+  "ai_mode": {
+    "enabled": true,
+    "params": {
+      "api_key": "your-deepseek-api-key",
+      "model": "deepseek-reasoner",
+      "base_url": "https://api.deepseek.com/chat/completions",
+      "thinking": false,
+      "confidence_threshold": 0.7,
+      "temperature": 0.7,
+      "timeout": 30,
+      "max_retries": 3
     }
   }
 }
@@ -107,8 +103,10 @@ The AI strategy is configured in `config/settings.json` under `strategy_config.A
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
-| `api_key` | string | Required | OpenRouter API key for LLM access |
-| `model` | string | "deepseek/deepseek-chat-v3.1:free" | LLM model to use (free tier available) |
+| `api_key` | string | Required | DeepSeek API key for LLM access |
+| `model` | string | "deepseek-reasoner" | LLM model to use |
+| `base_url` | string | "https://api.deepseek.com/chat/completions" | DeepSeek chat completions endpoint |
+| `thinking` | boolean | false | Enable DeepSeek reasoning mode |
 | `confidence_threshold` | float | 0.7 | Minimum confidence (0.0-1.0) required to execute trade |
 | `temperature` | float | 0.7 | LLM creativity parameter (0.0=deterministic, 1.0=creative) |
 | `timeout` | integer | 30 | API request timeout in seconds |
@@ -155,16 +153,10 @@ Decide: BUY/SELL/NONE? Respond JSON.
 
 ### Getting an API Key
 
-1. **Sign up at OpenRouter**: Visit [https://openrouter.ai/](https://openrouter.ai/)
-2. **Create API Key**: Go to Keys section and generate a new API key
-3. **Free Tier Available**: DeepSeek model is free to use (with rate limits)
-4. **Add to Config**: Copy the API key to `config/settings.json`
-5. **Monitor Usage**: Check OpenRouter dashboard for token usage and costs
-
-**Current API Key** (included in config):
-```
-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
-```
+1. **Sign up at DeepSeek**: Create an account on the DeepSeek platform
+2. **Create API Key**: Generate a new API key from your dashboard
+3. **Add to Config**: Copy the API key to `config/settings.json`
+4. **Monitor Usage**: Check your DeepSeek dashboard for token usage and costs
 
 ### How AI Makes Decisions
 

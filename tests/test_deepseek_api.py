@@ -196,7 +196,7 @@ def test_deepseek_api(json_path: str, api_key: str):
     
     Args:
         json_path: Path to test.json file
-        api_key: OpenRouter API key
+        api_key: DeepSeek API key
     """
     print("\n" + "="*70)
     print("🤖 DEEPSEEK API TEST")

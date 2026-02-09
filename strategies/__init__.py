@@ -10,7 +10,6 @@ from .ma_strategy import MAStrategy
 from .rsi_strategy import RSIStrategy
 from .macd_strategy import MACDStrategy
 from .strategy_manager import StrategyManager
-from .ai_strategy import AIStrategy
 
 __all__ = [
     'BaseStrategy',
@@ -18,7 +17,6 @@ __all__ = [
     'MAStrategy',
     'RSIStrategy',
     'MACDStrategy',
-    'StrategyManager',
-    'AIStrategy'
+    'StrategyManager'
 ]
 

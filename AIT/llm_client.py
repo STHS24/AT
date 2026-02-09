@@ -1,7 +1,7 @@
 """
-LLM Client for OpenRouter API integration.
+LLM Client for OpenAI-compatible chat completion APIs.
 
-Handles communication with the OpenRouter API for AI-powered trading decisions.
+Handles communication with DeepSeek API for AI-powered trading decisions.
 Includes error handling, retry logic, and response parsing.
 """
 
@@ -14,34 +14,45 @@ from datetime import datetime
 
 class LLMClient:
     """
-    Client for interacting with OpenRouter API.
+    Client for interacting with DeepSeek/OpenAI-compatible API.
     
     Provides methods to send trading context to LLM and receive decisions.
     """
     
-    def __init__(self, api_key: str, model: str = "deepseek/deepseek-chat-v3.1:free", 
-                 timeout: int = 30, max_retries: int = 3):
+    def __init__(
+        self,
+        api_key: str,
+        model: str = "deepseek-reasoner",
+        timeout: int = 30,
+        max_retries: int = 3,
+        base_url: str = "https://api.deepseek.com/chat/completions",
+        thinking: bool = False,
+        debug: bool = False,
+    ):
         """
         Initialize LLM Client.
         
         Args:
-            api_key: OpenRouter API key
-            model: Model identifier (default: deepseek-chat-v3.1:free)
+            api_key: API key for the configured provider
+            model: Model identifier (default: deepseek-reasoner)
             timeout: Request timeout in seconds
             max_retries: Maximum number of retry attempts
+            base_url: API endpoint for chat completions
+            thinking: Enable DeepSeek "thinking" mode (reasoning)
+            debug: Enable verbose debug logging
         """
         self.api_key = api_key
         self.model = model
         self.timeout = timeout
         self.max_retries = max_retries
-        self.base_url = "https://openrouter.ai/api/v1/chat/completions"
+        self.base_url = base_url
+        self.thinking = thinking
+        self.debug = debug
         
         # Request headers
         self.headers = {
             "Authorization": f"Bearer {self.api_key}",
-            "Content-Type": "application/json",
-            "HTTP-Referer": "https://github.com/STHS24/AT",
-            "X-Title": "TraderBot AI Strategy"
+            "Content-Type": "application/json"
         }
         
         # Statistics
@@ -49,6 +60,23 @@ class LLMClient:
         self.successful_requests = 0
         self.failed_requests = 0
         self.total_tokens_used = 0
+
+    def _log_debug(self, message: str):
+        if self.debug:
+            print(f"[LLMClient][DEBUG] {message}")
+
+    def _summarize_payload(self, payload: Dict[str, Any]) -> str:
+        try:
+            messages = payload.get("messages", [])
+            msg_summaries = []
+            for msg in messages:
+                role = msg.get("role", "unknown")
+                content = msg.get("content", "")
+                msg_summaries.append(f"{role}:{len(str(content))}c")
+            summary = ", ".join(msg_summaries)
+            return f"model={payload.get('model')} temp={payload.get('temperature')} max_tokens={payload.get('max_tokens')} messages=[{summary}]"
+        except Exception:
+            return "payload_summary_failed"
         
     def get_trading_decision(self, market_context: Dict[str, Any], 
                             system_prompt: Optional[str] = None,
@@ -81,8 +109,12 @@ class LLMClient:
             "temperature": temperature,
             "max_tokens": 1000
         }
+
+        if self.thinking:
+            payload["thinking"] = {"type": "enabled"}
         
         # Make API call with retry logic
+        self._log_debug(f"Sending request -> {self.base_url} | {self._summarize_payload(payload)}")
         response_data = self._make_request_with_retry(payload)
         
         if response_data is None:
@@ -120,7 +152,11 @@ class LLMClient:
             "max_tokens": 1000
         }
 
+        if self.thinking:
+            payload["thinking"] = {"type": "enabled"}
+
         # Make API call with retry logic
+        self._log_debug(f"Sending request -> {self.base_url} | {self._summarize_payload(payload)}")
         response_data = self._make_request_with_retry(payload)
 
         if response_data is None:
@@ -348,11 +384,19 @@ Rules:
                     json=payload,
                     timeout=self.timeout
                 )
+                self._log_debug(
+                    f"HTTP {response.status_code} | content-type={response.headers.get('Content-Type')} | "
+                    f"request-id={response.headers.get('X-Request-Id') or response.headers.get('Request-Id')}"
+                )
                 
                 # Check for successful response
                 if response.status_code == 200:
                     self.successful_requests += 1
-                    data = response.json()
+                    try:
+                        data = response.json()
+                    except json.JSONDecodeError:
+                        self._log_debug(f"Response JSON decode failed. Raw body (first 500): {response.text[:500]}")
+                        raise
                     
                     # Track token usage if available
                     if "usage" in data:
@@ -376,6 +420,7 @@ Rules:
                 # Handle other errors
                 else:
                     print(f"[LLMClient] API error {response.status_code}: {response.text}")
+                    self._log_debug(f"Error body (first 500): {response.text[:500]}")
                     if attempt < self.max_retries - 1:
                         time.sleep(1)
                         continue
@@ -414,9 +459,14 @@ Rules:
             # Extract message content
             if "choices" not in response_data or len(response_data["choices"]) == 0:
                 print("[LLMClient] No choices in response")
+                self._log_debug(f"Raw response keys: {list(response_data.keys())}")
                 return None
             
             content = response_data["choices"][0]["message"]["content"]
+            if not content or not str(content).strip():
+                print("[LLMClient] Empty content in response message")
+                self._log_debug(f"Raw choice: {response_data['choices'][0]}")
+                return None
             
             # Try to parse JSON from content
             # Sometimes LLM adds markdown code blocks or extra text, so we need to extract JSON
@@ -485,9 +535,14 @@ Rules:
             # Extract message content
             if "choices" not in response_data or len(response_data["choices"]) == 0:
                 print("[LLMClient] No choices in response")
+                self._log_debug(f"Raw response keys: {list(response_data.keys())}")
                 return None
 
             content = response_data["choices"][0]["message"]["content"]
+            if not content or not str(content).strip():
+                print("[LLMClient] Empty content in response message")
+                self._log_debug(f"Raw choice: {response_data['choices'][0]}")
+                return None
 
             # Try to parse JSON from content
             json_str = content.strip()

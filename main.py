@@ -6,15 +6,17 @@ import time
 import signal
 from datetime import datetime
 
-# Import new strategy system
+# Import strategy system
 from strategies import (
     SimpleStrategy,
     MAStrategy,
     RSIStrategy,
     MACDStrategy,
-    StrategyManager,
-    AIStrategy
+    StrategyManager
 )
+
+# Import AI mode
+from AIT import AIMode
 
 # Import risk management
 from risk_manager import RiskManager
@@ -97,13 +99,12 @@ def initialize_strategies():
     # Create strategy manager
     manager = StrategyManager(method=combination_method)
 
-    # Strategy class mapping
+    # Strategy class mapping (only technical strategies)
     strategy_classes = {
         "SimpleStrategy": SimpleStrategy,
         "MAStrategy": MAStrategy,
         "RSIStrategy": RSIStrategy,
-        "MACDStrategy": MACDStrategy,
-        "AIStrategy": AIStrategy
+        "MACDStrategy": MACDStrategy
     }
 
     # Initialize each configured strategy
@@ -117,11 +118,6 @@ def initialize_strategies():
         params = strategy_settings.get("params", {}).copy()
         if "timeframe" in params and isinstance(params["timeframe"], str):
             params["timeframe"] = timeframe_map.get(params["timeframe"], mt5.TIMEFRAME_M5)
-
-        # Special handling for AIStrategy - needs risk_manager and config
-        if strategy_name == "AIStrategy":
-            params["risk_manager"] = None  # Will be set after RISK_MANAGER is initialized
-            params["config"] = config
 
         # Create strategy instance
         strategy = strategy_class(params)
@@ -143,9 +139,6 @@ def initialize_strategies():
     return manager
 
 
-# Initialize strategy manager
-STRATEGY_MANAGER = initialize_strategies()
-
 # Initialize Risk Manager
 RISK_MANAGER = RiskManager(config)
 print(f"[Config] Risk Manager initialized")
@@ -153,12 +146,18 @@ print(f"[Config] Risk per trade: {RISK_MANAGER.risk_percentage}%")
 print(f"[Config] SL/TP method: {RISK_MANAGER.sl_method}/{RISK_MANAGER.tp_method}")
 print(f"[Config] Daily limits: Loss=${RISK_MANAGER.daily_loss_limit}, Profit=${RISK_MANAGER.daily_profit_target}")
 
-# Update AIStrategy instances with risk manager
-for strategy in STRATEGY_MANAGER.strategies:
-    if isinstance(strategy, AIStrategy):
-        strategy.params["risk_manager"] = RISK_MANAGER
-        strategy.market_analyzer.risk_manager = RISK_MANAGER
-        print(f"[Config] Updated {strategy.name} with Risk Manager")
+# Initialize AI Mode
+AI_MODE = None
+ai_mode_config = config.get("ai_mode", {})
+if ai_mode_config.get("enabled", False):
+    try:
+        AI_MODE = AIMode(ai_mode_config, RISK_MANAGER)
+    except Exception as e:
+        print(f"[Config] ⚠️  Failed to initialize AI Mode: {e}")
+        print(f"[Config] Will use fallback strategies")
+
+# Initialize strategy manager (fallback)
+STRATEGY_MANAGER = initialize_strategies()
 
 # Initialize Trade Logger and Analytics
 TRADE_LOGGER = TradeLogger()
@@ -460,19 +459,8 @@ def manage_open_positions_with_ai(symbol):
     Args:
         symbol: Trading symbol
     """
-    # Get AI strategy from manager
-    ai_strategy = None
-    for strategy in STRATEGY_MANAGER.strategies:
-        if isinstance(strategy, AIStrategy) and strategy.enabled:
-            ai_strategy = strategy
-            break
-
-    if ai_strategy is None:
-        return  # No AI strategy enabled
-
-    # Check if position management is enabled
-    if not ai_strategy.params.get("enable_position_management", True):
-        return  # Position management disabled
+    if not AI_MODE or not AI_MODE.enabled:
+        return  # AI mode not enabled
 
     # Get open positions for this symbol
     positions = get_open_positions(symbol)
@@ -480,26 +468,17 @@ def manage_open_positions_with_ai(symbol):
     if not positions:
         return  # No positions to manage
 
-    # Get minimum hold time
-    min_hold_minutes = ai_strategy.params.get("min_hold_time_minutes", 5)
-
     print(f"\n{'='*60}")
     print(f"🔍 AI Position Management - Analyzing {len(positions)} position(s)")
     print(f"{'='*60}")
 
     for position in positions:
         try:
-            # Check minimum hold time
-            from datetime import datetime, timedelta
-            open_time = datetime.fromtimestamp(position.time)
-            hold_duration = (datetime.now() - open_time).total_seconds() / 60
-
-            if hold_duration < min_hold_minutes:
-                print(f"\n⏱️  Position #{position.ticket} held for {hold_duration:.1f}min (min: {min_hold_minutes}min) - Skipping analysis")
-                continue
-
             # Get AI recommendation for this position
-            decision = ai_strategy.analyze_position(position, symbol)
+            decision = AI_MODE.manage_position(position, symbol, config)
+
+            if not decision:
+                continue
 
             action = decision.get("action", "HOLD")
             reasoning = decision.get("reasoning", "")
@@ -554,7 +533,8 @@ def trading_iteration(symbol, force_execution=False):
 
     # First, manage existing positions with AI (if enabled)
     # Position management can always run (not subject to trade cooldown)
-    manage_open_positions_with_ai(symbol)
+    if AI_MODE and AI_MODE.enabled:
+        manage_open_positions_with_ai(symbol)
 
     # Check trade cooldown
     current_time = time.time()
@@ -565,8 +545,17 @@ def trading_iteration(symbol, force_execution=False):
         print(f"⏳ Trade cooldown: {cooldown_remaining:.0f}s remaining (use urgent bypass if needed)")
         return
 
-    # Get combined strategy decision
-    action = STRATEGY_MANAGER.generate_combined_signal(symbol)
+    # Get trading signal: AI mode first, fallback to strategies
+    action = "NONE"
+
+    if AI_MODE and AI_MODE.enabled:
+        # Use AI mode
+        action = AI_MODE.get_trading_signal(symbol, config)
+
+    if action == "NONE":
+        # Fallback to strategy manager
+        print(f"[Trading] Using fallback strategies...")
+        action = STRATEGY_MANAGER.generate_combined_signal(symbol)
 
     if action not in ["BUY", "SELL"]:
         print("⚠️  No trade signal from strategy.")
@@ -650,17 +639,7 @@ def run_continuous_trading():
 
             # Check if AI detected urgent opportunity
             force_execution = False
-
-            # Get AI strategy to check urgency
-            ai_strategy = None
-            for strategy in STRATEGY_MANAGER.strategies:
-                if isinstance(strategy, AIStrategy) and strategy.enabled:
-                    ai_strategy = strategy
-                    break
-
-            # Perform trading iteration
-            # If urgent bypass is enabled and AI marked last decision as urgent, force execution
-            if ENABLE_URGENT_BYPASS and ai_strategy and ai_strategy.is_last_decision_urgent():
+            if ENABLE_URGENT_BYPASS and AI_MODE and AI_MODE.enabled and AI_MODE.is_last_decision_urgent():
                 force_execution = True
                 print("🚨 URGENT OPPORTUNITY DETECTED - Bypassing trade cooldown!")
 

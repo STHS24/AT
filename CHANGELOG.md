@@ -6,6 +6,67 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## [0.11.0] - 2025-11-07
+
+### Milestone 11: AI Mode Modularization ✅ COMPLETED
+
+This release refactors the AI system from a strategy to a mode, separating AI logic into the AIT folder and enabling fallback to traditional strategies.
+
+#### Added
+
+**AIT Package (`AIT/`)**
+- **AIMode (`AIT/ai_mode.py`)**: AI mode manager that uses LLM for trading decisions
+- **LLMClient (`AIT/llm_client.py`)**: Moved from strategies/, handles DeepSeek API communication
+- **MarketAnalyzer (`AIT/market_analyzer.py`)**: Moved from strategies/, collects market data
+- **Package Init (`AIT/__init__.py`)**: Exports AIMode, LLMClient, MarketAnalyzer
+
+**AI Mode Configuration (`config/settings.json`)**
+- **ai_mode Section**: New root-level configuration for AI mode
+- **enabled Flag**: Enable/disable AI mode independently
+- **params Object**: All AI parameters (api_key, model, confidence_threshold, etc.)
+- **Fallback Strategies**: enabled_strategies now contains traditional strategies for fallback
+
+#### Changed
+
+**Configuration Structure**
+- **Before**: AIStrategy as a strategy in strategy_config
+- **After**: ai_mode as root-level configuration, strategies folder only contains technical strategies
+- **Fallback**: If AI mode disabled or fails, uses traditional strategies (SimpleStrategy, MAStrategy, etc.)
+
+**Main Bot Logic (`main.py`)**
+- **AI Mode Initialization**: Checks ai_mode.enabled and initializes AIMode with risk manager
+- **Trading Signal Flow**: AI mode first, fallback to strategy manager if AI returns NONE or fails
+- **Position Management**: Uses AI_MODE.manage_position() instead of AIStrategy
+- **Urgent Bypass**: Uses AI_MODE.is_last_decision_urgent() for urgent trade detection
+- **Removed AIStrategy Import**: No longer imports AIStrategy from strategies
+
+**Strategies Package (`strategies/__init__.py`)**
+- **Removed AIStrategy**: No longer exports AIStrategy
+- **Clean Separation**: Only technical strategies (Simple, MA, RSI, MACD) remain
+
+#### Removed
+
+**AI Strategy from Strategies Folder**
+- **strategies/ai_strategy.py**: Functionality moved to AIT/ai_mode.py
+- **strategies/llm_client.py**: Moved to AIT/llm_client.py
+- **strategies/market_analyzer.py**: Moved to AIT/market_analyzer.py
+
+#### Technical Details
+
+**AI Mode vs Strategy Mode**
+- **AI Mode**: Uses LLM to analyze market and make decisions, can use strategy signals as context
+- **Strategy Mode**: Uses traditional technical indicator strategies with majority voting
+- **Fallback Pattern**: If AI mode fails or disabled, automatically falls back to strategy mode
+- **No Hardcoding**: AI mode dynamically uses strategies from strategies folder (not hardcoded)
+
+**Benefits**
+- **Cleaner Architecture**: AI logic separated from technical strategies
+- **Better Fallback**: Robust fallback to traditional strategies if AI fails
+- **Easier Maintenance**: AI components isolated in AIT folder
+- **Flexible Configuration**: Enable/disable AI mode without touching strategy config
+
+---
+
 ## [0.10.0] - 2025-11-05
 
 ### Milestone 10: Token Usage Optimization ✅ COMPLETED
@@ -261,7 +322,7 @@ This release transforms the bot from signal-based trading to AI-powered decision
 #### Added
 
 **AI Strategy System (`strategies/ai_strategy.py`)**
-- **LLM Integration**: Uses OpenRouter API with DeepSeek Chat v3.1 model for trading decisions
+- **LLM Integration**: Uses DeepSeek API with DeepSeek Chat v3.1 model for trading decisions
 - **Comprehensive Analysis**: AI analyzes market data, technical indicators, positions, and risk metrics
 - **Explainable Decisions**: Every decision includes detailed reasoning and key factors
 - **Confidence Filtering**: Only trades when AI confidence exceeds threshold (default: 70%)
@@ -269,7 +330,7 @@ This release transforms the bot from signal-based trading to AI-powered decision
 - **Statistics Tracking**: Monitors AI performance, confidence levels, and API usage
 
 **LLM Client (`strategies/llm_client.py`)**
-- **OpenRouter API Integration**: Communicates with OpenRouter API for LLM access
+- **DeepSeek API Integration**: Communicates with DeepSeek API for LLM access
 - **Retry Logic**: Exponential backoff retry mechanism for API failures
 - **Error Handling**: Robust error handling for timeouts, rate limits, and API errors
 - **Response Parsing**: Parses JSON responses with support for markdown code blocks
@@ -353,7 +414,7 @@ This release transforms the bot from signal-based trading to AI-powered decision
 #### Migration Notes
 
 - **Existing Bots**: Traditional strategies still available, can be re-enabled in config
-- **API Key Required**: AIStrategy requires OpenRouter API key in configuration
+- **API Key Required**: AIStrategy requires DeepSeek API key in configuration
 - **Free Tier**: Using free DeepSeek model, no API costs
 - **Backward Compatible**: Can switch back to traditional strategies by updating config
 
