@@ -107,7 +107,7 @@ class LLMClient:
                 {"role": "user", "content": user_prompt}
             ],
             "temperature": temperature,
-            "max_tokens": 1000
+            "max_tokens": 2000  # Reasoner uses tokens for CoT + answer
         }
 
         if self.thinking:
@@ -149,7 +149,7 @@ class LLMClient:
                 {"role": "user", "content": user_prompt}
             ],
             "temperature": temperature,
-            "max_tokens": 1000
+            "max_tokens": 2000  # Reasoner uses tokens for CoT + answer
         }
 
         if self.thinking:
@@ -456,16 +456,23 @@ Rules:
             Parsed trading decision or None if invalid
         """
         try:
-            # Extract message content
+            # Extract message content with fallbacks for DeepSeek reasoner
             if "choices" not in response_data or len(response_data["choices"]) == 0:
                 print("[LLMClient] No choices in response")
                 self._log_debug(f"Raw response keys: {list(response_data.keys())}")
                 return None
-            
-            content = response_data["choices"][0]["message"]["content"]
+
+            choice = response_data["choices"][0]
+            message = choice.get("message", {})
+            content = (
+                message.get("content")
+                or message.get("reasoning_content")
+                or choice.get("text")
+            )
+
             if not content or not str(content).strip():
-                print("[LLMClient] Empty content in response message")
-                self._log_debug(f"Raw choice: {response_data['choices'][0]}")
+                print("[LLMClient] Empty content in response message (content/reasoning/text)")
+                self._log_debug(f"Raw choice: {choice}")
                 return None
             
             # Try to parse JSON from content
@@ -532,16 +539,23 @@ Rules:
             Parsed position decision or None if invalid
         """
         try:
-            # Extract message content
+            # Extract message content with fallbacks for DeepSeek reasoner
             if "choices" not in response_data or len(response_data["choices"]) == 0:
                 print("[LLMClient] No choices in response")
                 self._log_debug(f"Raw response keys: {list(response_data.keys())}")
                 return None
 
-            content = response_data["choices"][0]["message"]["content"]
+            choice = response_data["choices"][0]
+            message = choice.get("message", {})
+            content = (
+                message.get("content")
+                or message.get("reasoning_content")
+                or choice.get("text")
+            )
+
             if not content or not str(content).strip():
-                print("[LLMClient] Empty content in response message")
-                self._log_debug(f"Raw choice: {response_data['choices'][0]}")
+                print("[LLMClient] Empty content in response message (content/reasoning/text)")
+                self._log_debug(f"Raw choice: {choice}")
                 return None
 
             # Try to parse JSON from content
